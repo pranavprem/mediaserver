@@ -1,0 +1,141 @@
+services:
+  gluetun:
+    image: qmcgaw/gluetun:latest
+    container_name: gluetun
+    cap_add: [NET_ADMIN]
+    devices: [/dev/net/tun:/dev/net/tun]
+    environment:
+      - VPN_SERVICE_PROVIDER=protonvpn
+      - VPN_TYPE=wireguard
+      - WIREGUARD_PRIVATE_KEY=${WIREGUARD_PRIVATE_KEY}
+      - WIREGUARD_ADDRESSES=${WIREGUARD_ADDRESSES}
+      - SERVER_COUNTRIES=Switzerland
+      - PORT_FORWARDING=on
+      - FIREWALL=outgoing
+    ports:
+      - "${QBITTORRENT_TORRENT_PORT}:${QBITTORRENT_TORRENT_PORT}/tcp"
+      - "${PROWLARR_PORT}:${PROWLARR_PORT}"
+      - "${RADARR_PORT}:${RADARR_PORT}"
+      - "${SONARR_PORT}:${SONARR_PORT}"
+      - "${QBITTORRENT_PORT}:${QBITTORRENT_PORT}"  # qBit WebUI
+      - "${SABNZBD_PORT}:8080"  # SABnzbd WebUI
+    volumes:
+      - ${CONFIG_ROOT}/gluetun:/gluetun
+    restart: unless-stopped
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    network_mode: "service:gluetun"
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - WEBUI_PORT=${QBITTORRENT_PORT}
+    volumes:
+      - ${CONFIG_ROOT}/qbittorrent:/config
+      - ${DOWNLOADS_ROOT}:/downloads
+    depends_on: [gluetun]
+    restart: unless-stopped
+
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    network_mode: "service:gluetun"
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${CONFIG_ROOT}/prowlarr:/config
+    depends_on: [gluetun]
+    restart: unless-stopped
+
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    network_mode: "service:gluetun"
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${CONFIG_ROOT}/radarr:/config
+      - ${DOWNLOADS_ROOT}:/downloads
+      - ${MOVIES_ROOT}:/movies
+    depends_on: [gluetun]
+    restart: unless-stopped
+
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    network_mode: "service:gluetun"
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${CONFIG_ROOT}/sonarr:/config
+      - ${DOWNLOADS_ROOT}:/downloads
+      - ${TV_ROOT}:/tv
+    depends_on: [gluetun]
+    restart: unless-stopped
+
+  jellyfin:
+    image: lscr.io/linuxserver/jellyfin:latest
+    container_name: jellyfin
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${CONFIG_ROOT}/jellyfin:/config
+      - ${MOVIES_ROOT}:/movies
+      - ${TV_ROOT}:/tv
+    ports:
+      - ${JELLYFIN_PORT}:${JELLYFIN_PORT}
+    restart: unless-stopped
+
+  jellyseerr:
+    image: fallenbagel/jellyseerr:latest
+    container_name: jellyseerr
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - LOG_LEVEL=info
+    volumes:
+      - ${CONFIG_ROOT}/jellyseerr:/app/config
+    ports:
+      - ${JELLYSEERR_PORT}:${JELLYSEERR_PORT}
+    restart: unless-stopped
+
+  plex:
+    image: lscr.io/linuxserver/plex:latest
+    container_name: plex
+    network_mode: host
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - PLEX_CLAIM=${PLEX_CLAIM}
+    volumes:
+      - ${CONFIG_ROOT}/plex:/config
+      - ${MOVIES_ROOT}:/movies
+      - ${TV_ROOT}:/tv
+    restart: unless-stopped
+
+  sabnzbd:
+    image: lscr.io/linuxserver/sabnzbd:latest
+    container_name: sabnzbd
+    network_mode: "service:gluetun"
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${CONFIG_ROOT}/sabnzbd:/config
+      - ${DOWNLOADS_ROOT}:/downloads
+      - ${DOWNLOADS_ROOT}/incomplete:/incomplete-downloads
+    depends_on: [gluetun]
+    restart: unless-stopped
