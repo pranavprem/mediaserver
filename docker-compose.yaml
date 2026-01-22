@@ -1,9 +1,33 @@
+# ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+# ┃                                                                              ┃
+# ┃   ██╗   ██╗███████╗██████╗ ██╗   ██╗    ███╗   ██╗ █████╗ ███████╗           ┃
+# ┃   ██║   ██║██╔════╝██╔══██╗╚██╗ ██╔╝    ████╗  ██║██╔══██╗██╔════╝           ┃
+# ┃   ██║   ██║█████╗  ██████╔╝ ╚████╔╝     ██╔██╗ ██║███████║███████╗           ┃
+# ┃   ╚██╗ ██╔╝██╔══╝  ██╔══██╗  ╚██╔╝      ██║╚██╗██║██╔══██║╚════██║           ┃
+# ┃    ╚████╔╝ ███████╗██║  ██║   ██║       ██║ ╚████║██║  ██║███████║           ┃
+# ┃     ╚═══╝  ╚══════╝╚═╝  ╚═╝   ╚═╝       ╚═╝  ╚═══╝╚═╝  ╚═╝╚══════╝           ┃
+# ┃                                                                              ┃
+# ┃                    M E D I A   S E R V E R   S T A C K                       ┃
+# ┃                              ─── PRANAV ───                                  ┃
+# ┃                                                                              ┃
+# ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
 services:
+
+# ╭──────────────────────────────────────────────────────────────────────────────╮
+# │  ░█▀█░█▀▀░▀█▀░█░█░█▀█░█▀▄░█░█                                                │
+# │  ░█░█░█▀▀░░█░░█▄█░█░█░█▀▄░█▀▄                                                │
+# │  ░▀░▀░▀▀▀░░▀░░▀░▀░▀▀▀░▀░▀░▀░▀                                                │
+# │  VPN Gateway & Tunnel Services                                               │
+# ╰──────────────────────────────────────────────────────────────────────────────╯
+
   gluetun:
     image: qmcgaw/gluetun:latest
     container_name: gluetun
-    cap_add: [NET_ADMIN]
-    devices: [/dev/net/tun:/dev/net/tun]
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
     environment:
       - VPN_SERVICE_PROVIDER=protonvpn
       - VPN_TYPE=wireguard
@@ -13,20 +37,38 @@ services:
       - PORT_FORWARDING=on
       - FIREWALL=outgoing
     ports:
-      - "${QBITTORRENT_TORRENT_PORT}:${QBITTORRENT_TORRENT_PORT}/tcp"
-      - "${PROWLARR_PORT}:${PROWLARR_PORT}"
-      - "${RADARR_PORT}:${RADARR_PORT}"
-      - "${SONARR_PORT}:${SONARR_PORT}"
-      - "${QBITTORRENT_PORT}:${QBITTORRENT_PORT}"  # qBit WebUI
-      - "${SABNZBD_PORT}:8080"  # SABnzbd WebUI
+      - ${QBITTORRENT_TORRENT_PORT}:${QBITTORRENT_TORRENT_PORT}/tcp
+      - ${QBITTORRENT_PORT}:${QBITTORRENT_PORT}
+      - ${SABNZBD_PORT}:8080
+      - ${PROWLARR_PORT}:${PROWLARR_PORT}
+      - ${RADARR_PORT}:${RADARR_PORT}
+      - ${SONARR_PORT}:${SONARR_PORT}
+      - ${READARR_PORT}:${READARR_PORT}
+      - ${LAZYLIBRARIAN_PORT}:5299
+      - ${CALIBRE_HTTP_PORT}:8082
+      - ${CALIBRE_HTTPS_PORT}:8181
+      - ${CALIBRE_WS_PORT}:8081
     volumes:
       - ${CONFIG_ROOT}/gluetun:/gluetun
     restart: unless-stopped
 
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARED_TOKEN}
+    restart: unless-stopped
+
+# ╭──────────────────────────────────────────────────────────────────────────────╮
+# │  ░█▀▄░█▀█░█░█░█▀█░█░░░█▀█░█▀█░█▀▄░█▀▀                                        │
+# │  ░█░█░█░█░█▄█░█░█░█░░░█░█░█▀█░█░█░▀▀█                                        │
+# │  ░▀▀░░▀▀▀░▀░▀░▀░▀░▀▀▀░▀▀▀░▀░▀░▀▀░░▀▀▀                                        │
+# │  Torrent & Usenet Clients                                                    │
+# ╰──────────────────────────────────────────────────────────────────────────────╯
+
   qbittorrent:
     image: lscr.io/linuxserver/qbittorrent:latest
     container_name: qbittorrent
-    network_mode: "service:gluetun"
+    network_mode: service:gluetun
     environment:
       - PUID=${PUID}
       - PGID=${PGID}
@@ -35,26 +77,51 @@ services:
     volumes:
       - ${CONFIG_ROOT}/qbittorrent:/config
       - ${DOWNLOADS_ROOT}:/downloads
-    depends_on: [gluetun]
+    depends_on:
+      - gluetun
     restart: unless-stopped
+
+  sabnzbd:
+    image: lscr.io/linuxserver/sabnzbd:latest
+    container_name: sabnzbd
+    network_mode: service:gluetun
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${CONFIG_ROOT}/sabnzbd:/config
+      - ${DOWNLOADS_ROOT}:/downloads
+      - ${DOWNLOADS_ROOT}/incomplete:/incomplete-downloads
+    depends_on:
+      - gluetun
+    restart: unless-stopped
+
+# ╭──────────────────────────────────────────────────────────────────────────────╮
+# │  ░█▀█░█▀▄░█▀▄░░░█▀▀░▀█▀░█▀█░█▀▀░█░█                                          │
+# │  ░█▀█░█▀▄░█▀▄░░░▀▀█░░█░░█▀█░█░░░█▀▄                                          │
+# │  ░▀░▀░▀░▀░▀░▀░░░▀▀▀░░▀░░▀░▀░▀▀▀░▀░▀                                          │
+# │  Media Management & Automation                                               │
+# ╰──────────────────────────────────────────────────────────────────────────────╯
 
   prowlarr:
     image: lscr.io/linuxserver/prowlarr:latest
     container_name: prowlarr
-    network_mode: "service:gluetun"
+    network_mode: service:gluetun
     environment:
       - PUID=${PUID}
       - PGID=${PGID}
       - TZ=${TZ}
     volumes:
       - ${CONFIG_ROOT}/prowlarr:/config
-    depends_on: [gluetun]
+    depends_on:
+      - gluetun
     restart: unless-stopped
 
   radarr:
     image: lscr.io/linuxserver/radarr:latest
     container_name: radarr
-    network_mode: "service:gluetun"
+    network_mode: service:gluetun
     environment:
       - PUID=${PUID}
       - PGID=${PGID}
@@ -63,13 +130,14 @@ services:
       - ${CONFIG_ROOT}/radarr:/config
       - ${DOWNLOADS_ROOT}:/downloads
       - ${MOVIES_ROOT}:/movies
-    depends_on: [gluetun]
+    depends_on:
+      - gluetun
     restart: unless-stopped
 
   sonarr:
     image: lscr.io/linuxserver/sonarr:latest
     container_name: sonarr
-    network_mode: "service:gluetun"
+    network_mode: service:gluetun
     environment:
       - PUID=${PUID}
       - PGID=${PGID}
@@ -78,8 +146,53 @@ services:
       - ${CONFIG_ROOT}/sonarr:/config
       - ${DOWNLOADS_ROOT}:/downloads
       - ${TV_ROOT}:/tv
-    depends_on: [gluetun]
+    depends_on:
+      - gluetun
     restart: unless-stopped
+
+  lazylibrarian:
+    image: lscr.io/linuxserver/lazylibrarian:latest
+    container_name: lazylibrarian
+    network_mode: service:gluetun
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${CONFIG_ROOT}/lazylibrarian:/config
+      - ${DOWNLOADS_ROOT}:/downloads
+      - ${BOOKS_ROOT}:/books
+    depends_on:
+      - gluetun
+    restart: unless-stopped
+
+  calibre:
+    image: lscr.io/linuxserver/calibre:latest
+    container_name: calibre
+    network_mode: service:gluetun
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - PASSWORD=${CALIBRE_PASSWORD}
+      - CUSTOM_PORT=8082
+      - CLI_ARGS=${CALIBRE_CLI_ARGS}
+    volumes:
+      - ${CONFIG_ROOT}/calibre:/config
+      - ${BOOKS_ROOT}:/books
+    shm_size: 1g
+    depends_on:
+      - gluetun
+    restart: unless-stopped
+
+# ╭──────────────────────────────────────────────────────────────────────────────╮
+# │  ░█▄█░█▀▀░█▀▄░▀█▀░█▀█░░░█▀▀░█▀▀░█▀▄░█░█░█▀▀░█▀▄░█▀▀                          │
+# │  ░█░█░█▀▀░█░█░░█░░█▀█░░░▀▀█░█▀▀░█▀▄░▀▄▀░█▀▀░█▀▄░▀▀█                          │
+# │  ░▀░▀░▀▀▀░▀▀░░▀▀▀░▀░▀░░░▀▀▀░▀▀▀░▀░▀░░▀░░▀▀▀░▀░▀░▀▀▀                          │
+# │  Streaming & Library Access                                                  │
+# ╰──────────────────────────────────────────────────────────────────────────────╯
 
   jellyfin:
     image: lscr.io/linuxserver/jellyfin:latest
@@ -93,7 +206,7 @@ services:
       - ${MOVIES_ROOT}:/movies
       - ${TV_ROOT}:/tv
     ports:
-      - ${JELLYFIN_PORT}:${JELLYFIN_PORT}
+      - ${JELLYFIN_PORT}:8096
     restart: unless-stopped
 
   jellyseerr:
@@ -107,13 +220,12 @@ services:
     volumes:
       - ${CONFIG_ROOT}/jellyseerr:/app/config
     ports:
-      - ${JELLYSEERR_PORT}:${JELLYSEERR_PORT}
+      - ${JELLYSEERR_PORT}:5055
     restart: unless-stopped
 
   plex:
     image: lscr.io/linuxserver/plex:latest
     container_name: plex
-    network_mode: host
     environment:
       - PUID=${PUID}
       - PGID=${PGID}
@@ -123,19 +235,20 @@ services:
       - ${CONFIG_ROOT}/plex:/config
       - ${MOVIES_ROOT}:/movies
       - ${TV_ROOT}:/tv
+    ports:
+      - ${PLEX_PORT}:32400
     restart: unless-stopped
 
-  sabnzbd:
-    image: lscr.io/linuxserver/sabnzbd:latest
-    container_name: sabnzbd
-    network_mode: "service:gluetun"
+  calibre-web:
+    image: lscr.io/linuxserver/calibre-web:latest
+    container_name: calibre-web
     environment:
       - PUID=${PUID}
       - PGID=${PGID}
       - TZ=${TZ}
     volumes:
-      - ${CONFIG_ROOT}/sabnzbd:/config
-      - ${DOWNLOADS_ROOT}:/downloads
-      - ${DOWNLOADS_ROOT}/incomplete:/incomplete-downloads
-    depends_on: [gluetun]
+      - ${CONFIG_ROOT}/calibre-web:/config
+      - ${BOOKS_ROOT}:/books
+    ports:
+      - ${CALIBRE_WEB_PORT}:8083
     restart: unless-stopped

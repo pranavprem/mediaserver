@@ -1,6 +1,8 @@
-# UGREEN NAS Media Server (Docker Compose) — Rebuild Guide
+# Very NAS Media Server
 
-This repository is the "single-folder" record of the media server stack that was built on a UGREEN NAS. The Docker Compose project lives at `/volume1/docker/mediaserver`, while persistent data (configs, downloads, movies, tv) lives under `/volume1/media`.
+I got a NAS and then decided to use it as a media server. In the process, I ended up orchestrating a rather cool stack of docker containers. So here it is. I'm told it's "Very NAS"
+
+---- The readme beyond this point is written by AI ----
 
 The intent: clone this repo onto a fresh NAS, follow the steps in order, and end up with the same working setup (including fixes for the exact problems that happened during the original build).
 
