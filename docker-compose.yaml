@@ -44,10 +44,6 @@ services:
       - ${RADARR_PORT}:${RADARR_PORT}
       - ${SONARR_PORT}:${SONARR_PORT}
       - ${READARR_PORT}:${READARR_PORT}
-      - ${LAZYLIBRARIAN_PORT}:5299
-      - ${CALIBRE_HTTP_PORT}:8082
-      - ${CALIBRE_HTTPS_PORT}:8181
-      - ${CALIBRE_WS_PORT}:8081
     volumes:
       - ${CONFIG_ROOT}/gluetun:/gluetun
     restart: unless-stopped
@@ -150,43 +146,6 @@ services:
       - gluetun
     restart: unless-stopped
 
-  lazylibrarian:
-    image: lscr.io/linuxserver/lazylibrarian:latest
-    container_name: lazylibrarian
-    network_mode: service:gluetun
-    environment:
-      - PUID=${PUID}
-      - PGID=${PGID}
-      - TZ=${TZ}
-    volumes:
-      - ${CONFIG_ROOT}/lazylibrarian:/config
-      - ${DOWNLOADS_ROOT}:/downloads
-      - ${BOOKS_ROOT}:/books
-    depends_on:
-      - gluetun
-    restart: unless-stopped
-
-  calibre:
-    image: lscr.io/linuxserver/calibre:latest
-    container_name: calibre
-    network_mode: service:gluetun
-    security_opt:
-      - seccomp:unconfined
-    environment:
-      - PUID=${PUID}
-      - PGID=${PGID}
-      - TZ=${TZ}
-      - PASSWORD=${CALIBRE_PASSWORD}
-      - CUSTOM_PORT=8082
-      - CLI_ARGS=${CALIBRE_CLI_ARGS}
-    volumes:
-      - ${CONFIG_ROOT}/calibre:/config
-      - ${BOOKS_ROOT}:/books
-    shm_size: 1g
-    depends_on:
-      - gluetun
-    restart: unless-stopped
-
 # ╭──────────────────────────────────────────────────────────────────────────────╮
 # │  ░█▄█░█▀▀░█▀▄░▀█▀░█▀█░░░█▀▀░█▀▀░█▀▄░█░█░█▀▀░█▀▄░█▀▀                          │
 # │  ░█░█░█▀▀░█░█░░█░░█▀█░░░▀▀█░█▀▀░█▀▄░▀▄▀░█▀▀░█▀▄░▀▀█                          │
@@ -239,16 +198,22 @@ services:
       - ${PLEX_PORT}:32400
     restart: unless-stopped
 
-  calibre-web:
-    image: lscr.io/linuxserver/calibre-web:latest
-    container_name: calibre-web
+# ╭──────────────────────────────────────────────────────────────────────────────╮
+# │  Vaultwarden - Password Manager (Cloudflare tunnel: vault.pranavprem.com)    │
+# ╰──────────────────────────────────────────────────────────────────────────────╯
+
+  vaultwarden:
+    image: vaultwarden/server:latest
+    container_name: vaultwarden
+    user: ${PUID}:${PGID}
     environment:
-      - PUID=${PUID}
-      - PGID=${PGID}
-      - TZ=${TZ}
+      - DOMAIN=${VAULTWARDEN_DOMAIN}
+      - ROCKET_PORT=7777
+      - SIGNUPS_ALLOWED=${VAULTWARDEN_SIGNUPS_ALLOWED:-false}
+      - INVITATIONS_ALLOWED=false
+      - SHOW_PASSWORD_HINT=false
+      - ADMIN_TOKEN=${VAULTWARDEN_ADMIN_TOKEN}
     volumes:
-      - ${CONFIG_ROOT}/calibre-web:/config
-      - ${BOOKS_ROOT}:/books
-    ports:
-      - ${CALIBRE_WEB_PORT}:8083
+      - ${CONFIG_ROOT}/vaultwarden:/data
     restart: unless-stopped
+

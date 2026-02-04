@@ -15,6 +15,7 @@ The intent: clone this repo onto a fresh NAS, follow the steps in order, and end
 - Automates TV + Movies with Sonarr/Radarr, with indexers managed by Prowlarr.
 - Provides a request UI with Jellyseerr that can drive Sonarr/Radarr and integrate with media servers.
 - Streams locally via Jellyfin; Plex can be added for devices that require it.
+- Self-hosted password manager (Vaultwarden) via Cloudflare tunnel at vault.pranavprem.com.
 
 ---
 
@@ -71,7 +72,7 @@ Create the repo folder and the persistent folder structure:
 ```bash
 mkdir -p /volume1/docker/mediaserver
 mkdir -p /volume1/media/{downloads,downloads/incomplete,movies,tv}
-mkdir -p /volume1/media/config/{gluetun,qbittorrent,sabnzbd,prowlarr,sonarr,radarr,jellyfin,jellyseerr,plex}
+mkdir -p /volume1/media/config/{gluetun,qbittorrent,sabnzbd,prowlarr,sonarr,radarr,jellyfin,jellyseerr,plex,vaultwarden}
 ```
 
 ---
@@ -276,6 +277,20 @@ docker compose ps
 ```bash
 docker compose logs --tail=200
 ```
+
+---
+
+## Vaultwarden (password manager)
+
+Vaultwarden is accessible via the Cloudflare tunnel at **vault.pranavprem.com**.
+
+**Cloudflare tunnel route:** Use `http://vaultwarden:7777` (not https). Vaultwarden serves HTTP; TLS is terminated at Cloudflare's edge. Traffic between cloudflared and vaultwarden stays on the local Docker network.
+
+**First-time setup:**
+1. Add `VAULTWARDEN_DOMAIN` and `VAULTWARDEN_ADMIN_TOKEN` to `.env`. Generate admin token: `docker run --rm -it vaultwarden/server /vaultwarden hash`
+2. Set `VAULTWARDEN_SIGNUPS_ALLOWED=true` in `.env` to create your account.
+3. Create account at https://vault.pranavprem.com, then set `VAULTWARDEN_SIGNUPS_ALLOWED=false` and redeploy.
+4. Enable 2FA (TOTP or WebAuthn) in your vault settings.
 
 ---
 
