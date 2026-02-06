@@ -35,7 +35,8 @@ services:
       - WIREGUARD_ADDRESSES=${WIREGUARD_ADDRESSES}
       - SERVER_COUNTRIES=Switzerland
       - PORT_FORWARDING=on
-      - FIREWALL=outgoing
+      - FIREWALL_OUTBOUND_SUBNETS=${LOCAL_SUBNET:-172.16.0.0/12,192.168.0.0/16}
+      - HEALTH_VPN_DURATION_INITIAL=30s
     ports:
       - ${QBITTORRENT_TORRENT_PORT}:${QBITTORRENT_TORRENT_PORT}/tcp
       - ${QBITTORRENT_PORT}:${QBITTORRENT_PORT}
@@ -43,16 +44,33 @@ services:
       - ${PROWLARR_PORT}:${PROWLARR_PORT}
       - ${RADARR_PORT}:${RADARR_PORT}
       - ${SONARR_PORT}:${SONARR_PORT}
-      - ${READARR_PORT}:${READARR_PORT}
     volumes:
       - ${CONFIG_ROOT}/gluetun:/gluetun
+    networks:
+      - downloads
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/gluetun-entrypoint", "healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: cloudflared
     command: tunnel --no-autoupdate run --token ${CLOUDFLARED_TOKEN}
+    networks:
+      - proxy
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "cloudflared", "tunnel", "--version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 # ╭──────────────────────────────────────────────────────────────────────────────╮
 # │  ░█▀▄░█▀█░█░█░█▀█░█░░░█▀█░█▀█░█▀▄░█▀▀                                        │
@@ -74,8 +92,16 @@ services:
       - ${CONFIG_ROOT}/qbittorrent:/config
       - ${DOWNLOADS_ROOT}:/downloads
     depends_on:
-      - gluetun
+      gluetun:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${QBITTORRENT_PORT:-8080}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   sabnzbd:
     image: lscr.io/linuxserver/sabnzbd:latest
@@ -90,8 +116,16 @@ services:
       - ${DOWNLOADS_ROOT}:/downloads
       - ${DOWNLOADS_ROOT}/incomplete:/incomplete-downloads
     depends_on:
-      - gluetun
+      gluetun:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 # ╭──────────────────────────────────────────────────────────────────────────────╮
 # │  ░█▀█░█▀▄░█▀▄░░░█▀▀░▀█▀░█▀█░█▀▀░█░█                                          │
@@ -111,8 +145,16 @@ services:
     volumes:
       - ${CONFIG_ROOT}/prowlarr:/config
     depends_on:
-      - gluetun
+      gluetun:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${PROWLARR_PORT:-9696}/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   radarr:
     image: lscr.io/linuxserver/radarr:latest
@@ -127,8 +169,16 @@ services:
       - ${DOWNLOADS_ROOT}:/downloads
       - ${MOVIES_ROOT}:/movies
     depends_on:
-      - gluetun
+      gluetun:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${RADARR_PORT:-7878}/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   sonarr:
     image: lscr.io/linuxserver/sonarr:latest
@@ -143,7 +193,28 @@ services:
       - ${DOWNLOADS_ROOT}:/downloads
       - ${TV_ROOT}:/tv
     depends_on:
-      - gluetun
+      gluetun:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${SONARR_PORT:-8989}/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  recyclarr:
+    image: ghcr.io/recyclarr/recyclarr:latest
+    container_name: recyclarr
+    environment:
+      - TZ=${TZ}
+    volumes:
+      - ${CONFIG_ROOT}/recyclarr:/config
+    networks:
+      - media
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
 
 # ╭──────────────────────────────────────────────────────────────────────────────╮
@@ -166,7 +237,17 @@ services:
       - ${TV_ROOT}:/tv
     ports:
       - ${JELLYFIN_PORT}:8096
+    networks:
+      - media
+      - proxy
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8096/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   jellyseerr:
     image: fallenbagel/jellyseerr:latest
@@ -180,7 +261,17 @@ services:
       - ${CONFIG_ROOT}/jellyseerr:/app/config
     ports:
       - ${JELLYSEERR_PORT}:5055
+    networks:
+      - media
+      - proxy
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5055/api/v1/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   plex:
     image: lscr.io/linuxserver/plex:latest
@@ -196,7 +287,17 @@ services:
       - ${TV_ROOT}:/tv
     ports:
       - ${PLEX_PORT}:32400
+    networks:
+      - media
+      - proxy
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:32400/identity"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 # ╭──────────────────────────────────────────────────────────────────────────────╮
 # │  Vaultwarden - Password Manager (Cloudflare tunnel: vault.pranavprem.com)    │
@@ -215,5 +316,182 @@ services:
       - ADMIN_TOKEN=${VAULTWARDEN_ADMIN_TOKEN}
     volumes:
       - ${CONFIG_ROOT}/vaultwarden:/data
+    networks:
+      - proxy
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:7777/alive"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+# ╭──────────────────────────────────────────────────────────────────────────────╮
+# │  ░▀█▀░█▄█░█▄█░▀█▀░█▀▀░█░█                                                    │
+# │  ░░█░░█░█░█░█░░█░░█░░░█▀█                                                    │
+# │  ░▀▀▀░▀░▀░▀░▀░▀▀▀░▀▀▀░▀░▀                                                    │
+# │  Self-hosted Photos (Cloudflare tunnel: photos.pranavprem.com)               │
+# ╰──────────────────────────────────────────────────────────────────────────────╯
+
+  immich-server:
+    image: ghcr.io/immich-app/immich-server:release
+    container_name: immich-server
+    environment:
+      - DB_HOSTNAME=immich-postgres
+      - DB_USERNAME=${IMMICH_DB_USERNAME:-postgres}
+      - DB_PASSWORD=${IMMICH_DB_PASSWORD}
+      - DB_DATABASE_NAME=${IMMICH_DB_DATABASE:-immich}
+      - REDIS_HOSTNAME=immich-redis
+      - REDIS_PASSWORD=${IMMICH_REDIS_PASSWORD}
+      - IMMICH_MACHINE_LEARNING_URL=http://immich-machine-learning:3003
+      - TZ=${TZ}
+    volumes:
+      - ${IMMICH_UPLOAD_LOCATION}:/usr/src/app/upload
+      - /etc/localtime:/etc/localtime:ro
+    depends_on:
+      immich-redis:
+        condition: service_healthy
+      immich-postgres:
+        condition: service_healthy
+    networks:
+      - immich
+      - proxy
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:2283/api/server/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  immich-machine-learning:
+    image: ghcr.io/immich-app/immich-machine-learning:release
+    container_name: immich-machine-learning
+    environment:
+      - TZ=${TZ}
+    volumes:
+      - ${CONFIG_ROOT}/immich/model-cache:/cache
+    networks:
+      - immich
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:3003/ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  immich-redis:
+    image: docker.io/redis:6.2-alpine
+    container_name: immich-redis
+    command: redis-server --appendonly yes --requirepass ${IMMICH_REDIS_PASSWORD}
+    environment:
+      - TZ=${TZ}
+      - REDISCLI_AUTH=${IMMICH_REDIS_PASSWORD}
+    volumes:
+      - ${CONFIG_ROOT}/immich/redis:/data
+    networks:
+      - immich
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  immich-postgres:
+    image: docker.io/tensorchord/pgvecto-rs:pg14-v0.2.0
+    container_name: immich-postgres
+    environment:
+      - POSTGRES_USER=${IMMICH_DB_USERNAME:-postgres}
+      - POSTGRES_PASSWORD=${IMMICH_DB_PASSWORD}
+      - POSTGRES_DB=${IMMICH_DB_DATABASE:-immich}
+      - POSTGRES_INITDB_ARGS=--data-checksums
+      - TZ=${TZ}
+    volumes:
+      - ${CONFIG_ROOT}/immich/postgres:/var/lib/postgresql/data
+    networks:
+      - immich
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d ${IMMICH_DB_DATABASE:-immich} -U ${IMMICH_DB_USERNAME:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+# ╭──────────────────────────────────────────────────────────────────────────────╮
+# │  ░█▄█░█▀█░█▀█░█▀█░█▀▀░█▀▀░█▄█░█▀▀░█▀█░▀█▀                                    │
+# │  ░█░█░█▀█░█░█░█▀█░█░█░█▀▀░█░█░█▀▀░█░█░░█░                                    │
+# │  ░▀░▀░▀░▀░▀░▀░▀░▀░▀▀▀░▀▀▀░▀░▀░▀▀▀░▀░▀░░▀░                                    │
+# │  Container Management & Auto-Updates                                         │
+# ╰──────────────────────────────────────────────────────────────────────────────╯
+
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer
+    command: -H unix:///var/run/docker.sock
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${CONFIG_ROOT}/portainer:/data
+    ports:
+      - ${PORTAINER_PORT:-9000}:9000
+    networks:
+      - management
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9000/api/system/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: watchtower
+    environment:
+      - TZ=${TZ}
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_SCHEDULE=${WATCHTOWER_SCHEDULE:-0 0 4 * * *}
+      - WATCHTOWER_ROLLING_RESTART=true
+      - WATCHTOWER_TIMEOUT=60s
+      - WATCHTOWER_INCLUDE_STOPPED=false
+      - WATCHTOWER_NOTIFICATIONS=${WATCHTOWER_NOTIFICATIONS:-}
+      - WATCHTOWER_NOTIFICATION_URL=${WATCHTOWER_NOTIFICATION_URL:-}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - management
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
 
+# ╭──────────────────────────────────────────────────────────────────────────────╮
+# │  Networks - Isolated by function                                             │
+# │                                                                              │
+# │  downloads  - VPN-tunneled services (gluetun + clients)                      │
+# │  media      - Media servers and management                                   │
+# │  proxy      - Services exposed via Cloudflare tunnel                         │
+# │  immich     - Photo stack (isolated DB/Redis)                                │
+# │  management - Portainer, Watchtower (docker.sock access)                     │
+# ╰──────────────────────────────────────────────────────────────────────────────╯
+
+networks:
+  downloads:
+    driver: bridge
+  media:
+    driver: bridge
+  proxy:
+    driver: bridge
+  immich:
+    driver: bridge
+    internal: true
+  management:
+    driver: bridge

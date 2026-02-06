@@ -13,9 +13,38 @@ The intent: clone this repo onto a fresh NAS, follow the steps in order, and end
 - Routes **download traffic** through ProtonVPN using `gluetun` + WireGuard.
 - Uses both **torrents** (qBittorrent) and **Usenet** (SABnzbd + Newshosting + NZBGeek).
 - Automates TV + Movies with Sonarr/Radarr, with indexers managed by Prowlarr.
+- **Recyclarr** auto-syncs quality profiles from TRaSH guides.
 - Provides a request UI with Jellyseerr that can drive Sonarr/Radarr and integrate with media servers.
 - Streams locally via Jellyfin; Plex can be added for devices that require it.
-- Self-hosted password manager (Vaultwarden) via Cloudflare tunnel at vault.pranavprem.com.
+- Self-hosted password manager (Vaultwarden) via Cloudflare tunnel.
+- Self-hosted photos (Immich) with ML-powered face recognition and smart search.
+- **Portainer** for container management UI.
+- **Watchtower** for automatic container updates.
+
+---
+
+## Architecture
+
+### Network Isolation
+
+Services are isolated into purpose-specific networks:
+
+| Network | Purpose | Containers |
+|---------|---------|------------|
+| `downloads` | VPN-tunneled traffic | gluetun, qbittorrent, sabnzbd, prowlarr, radarr, sonarr |
+| `media` | Media streaming & management | jellyfin, jellyseerr, plex, recyclarr |
+| `proxy` | Cloudflare tunnel access | cloudflared, jellyfin, jellyseerr, plex, vaultwarden, immich-server |
+| `immich` | Photo stack (internal) | immich-*, postgres, redis |
+| `management` | Container management | portainer, watchtower |
+
+### Security Features
+
+- ✅ All containers have `security_opt: no-new-privileges`
+- ✅ All containers have health checks
+- ✅ VPN kill switch (gluetun firewall)
+- ✅ Immich database isolated from other services
+- ✅ Docker socket mounted read-only where needed
+- ✅ Services depend on healthy upstream containers
 
 ---
 
@@ -35,7 +64,7 @@ The intent: clone this repo onto a fresh NAS, follow the steps in order, and end
 
 **In this repo (committed):**
 - `docker-compose.yaml`
-- `.env.example` (template only, no secrets)
+- `example.env` (template only, no secrets)
 - `README.md` (this file)
 
 **On the NAS (NOT committed):**
@@ -71,8 +100,9 @@ Create the repo folder and the persistent folder structure:
 
 ```bash
 mkdir -p /volume1/docker/mediaserver
-mkdir -p /volume1/media/{downloads,downloads/incomplete,movies,tv}
-mkdir -p /volume1/media/config/{gluetun,qbittorrent,sabnzbd,prowlarr,sonarr,radarr,jellyfin,jellyseerr,plex,vaultwarden}
+mkdir -p /volume1/media/{downloads,downloads/incomplete,movies,tv,photos}
+mkdir -p /volume1/media/config/{gluetun,qbittorrent,sabnzbd,prowlarr,sonarr,radarr,jellyfin,jellyseerr,plex,vaultwarden,portainer,recyclarr}
+mkdir -p /volume1/media/config/immich/{postgres,redis,model-cache}
 ```
 
 ---
@@ -115,38 +145,25 @@ You want two files:
 - `.env` (real secrets) — never commit
 - `.env.example` (template) — commit
 
-**Minimum .env.example shape:**
+Copy `example.env` to `.env` and fill in your values:
 
 ```bash
-TZ=America/Los_Angeles
-PUID=1000
-PGID=100
-
-CONFIG_ROOT=/volume1/media/config
-DOWNLOADS_ROOT=/volume1/media/downloads
-MOVIES_ROOT=/volume1/media/movies
-TV_ROOT=/volume1/media/tv
-
-QBITTORRENT_TORRENT_PORT=6881
-QBITTORRENT_PORT=8888
-PROWLARR_PORT=9696
-RADARR_PORT=7878
-SONARR_PORT=8989
-SABNZBD_PORT=8080
-JELLYFIN_PORT=8096
-JELLYSEERR_PORT=5055
-
-# Proton WireGuard (fill in real values in .env)
-WIREGUARD_PRIVATE_KEY=REDACTED
-WIREGUARD_ADDRESSES=REDACTED/32
-
-# Optional: Plex claim token
-PLEX_CLAIM=REDACTED
+cp example.env .env
+nano .env
 ```
 
-**Notes:**
-- SABnzbd's internal web UI port is 8080; you only change the external/LAN port.
-- Avoiding external port 8080 was intentional in this setup.
+### Generate secure passwords
+
+```bash
+# For Immich database
+openssl rand -base64 32
+
+# For Immich Redis  
+openssl rand -base64 32
+
+# For Vaultwarden admin token
+docker run --rm -it vaultwarden/server /vaultwarden hash
+```
 
 ---
 
@@ -259,11 +276,19 @@ Completed downloads should be imported/moved from `/volume1/media/downloads` int
 
 If Jellyfin shows "No valid media source", it often meant the media hadn't completed importing yet.
 
+### Health checks
+
+All containers should show "healthy":
+
+```bash
+docker compose ps
+```
+
 ---
 
 ## Maintenance commands
 
-**Update containers:**
+**Update containers (manual):**
 ```bash
 docker compose pull && docker compose up -d
 ```
@@ -278,6 +303,77 @@ docker compose ps
 docker compose logs --tail=200
 ```
 
+**Watchtower will auto-update containers** at 4 AM daily (configurable via `WATCHTOWER_SCHEDULE`).
+
+---
+
+## Recyclarr (TRaSH guides sync)
+
+Recyclarr automatically syncs quality profiles from the TRaSH guides to your Sonarr/Radarr instances.
+
+### First-time setup
+
+1. Generate config template:
+   ```bash
+   docker exec recyclarr recyclarr config create
+   ```
+
+2. Edit the config:
+   ```bash
+   nano /volume1/media/config/recyclarr/recyclarr.yml
+   ```
+
+3. Add your Sonarr/Radarr API keys and URLs. Example:
+   ```yaml
+   sonarr:
+     main:
+       base_url: http://172.17.0.1:8989
+       api_key: your-sonarr-api-key
+       quality_definition:
+         type: series
+       quality_profiles:
+         - name: WEB-1080p
+   
+   radarr:
+     main:
+       base_url: http://172.17.0.1:7878
+       api_key: your-radarr-api-key
+       quality_definition:
+         type: movie
+       quality_profiles:
+         - name: HD Bluray + WEB
+   ```
+
+4. Test sync:
+   ```bash
+   docker exec recyclarr recyclarr sync
+   ```
+
+5. Set up scheduled sync (add to crontab or use the container's built-in scheduler):
+   ```bash
+   docker exec recyclarr recyclarr sync --config /config/recyclarr.yml
+   ```
+
+---
+
+## Portainer
+
+Portainer provides a web UI for managing your Docker containers.
+
+**Access:** `http://NAS_IP:9000`
+
+**First-time setup:**
+1. Open Portainer in browser
+2. Create admin account
+3. Select "Docker" as the environment
+4. Connect to local Docker socket
+
+**Features:**
+- View container logs
+- Start/stop/restart containers
+- View resource usage
+- Manage volumes and networks
+
 ---
 
 ## Vaultwarden (password manager)
@@ -291,6 +387,96 @@ Vaultwarden is accessible via the Cloudflare tunnel at **vault.pranavprem.com**.
 2. Set `VAULTWARDEN_SIGNUPS_ALLOWED=true` in `.env` to create your account.
 3. Create account at https://vault.pranavprem.com, then set `VAULTWARDEN_SIGNUPS_ALLOWED=false` and redeploy.
 4. Enable 2FA (TOTP or WebAuthn) in your vault settings.
+5. **Recommended:** Set `VAULTWARDEN_ADMIN_TOKEN=` (empty) to disable admin panel after setup.
+
+---
+
+## Immich (self-hosted photos)
+
+Immich is accessible via the Cloudflare tunnel at **photos.pranavprem.com** (configure in Cloudflare dashboard).
+
+### Architecture
+
+Immich runs in an isolated network (`immich`) with:
+- **PostgreSQL** (with pgvector for ML embeddings)
+- **Redis** (for job queue)
+- **Machine Learning** container (face recognition, smart search)
+- **Server** (API + web interface)
+
+Only `immich-server` is on the proxy network (for Cloudflare tunnel access). Database and Redis are isolated.
+
+### First-time setup
+
+1. Folders should already exist from Step 1. Verify:
+   ```bash
+   ls -la /volume1/media/config/immich/
+   ls -la /volume1/media/photos/
+   ```
+
+2. Generate strong passwords and add to `.env`:
+   ```bash
+   # Generate passwords
+   openssl rand -base64 32  # for IMMICH_DB_PASSWORD
+   openssl rand -base64 32  # for IMMICH_REDIS_PASSWORD
+   ```
+
+3. Configure Cloudflare tunnel:
+   - Add route for `photos.pranavprem.com` → `http://immich-server:2283`
+
+4. Deploy (databases first to initialize):
+   ```bash
+   docker compose up -d immich-postgres immich-redis
+   sleep 15  # let DB initialize
+   docker compose up -d immich-machine-learning immich-server
+   ```
+
+5. Create your admin account at https://photos.pranavprem.com
+
+### Mobile app setup
+
+Download Immich app (iOS/Android), use `https://photos.pranavprem.com` as the server URL.
+
+### Backup strategy
+
+Back up the PostgreSQL data regularly:
+```bash
+docker exec immich-postgres pg_dump -U postgres immich > immich_backup_$(date +%Y%m%d).sql
+```
+
+---
+
+## Watchtower (auto-updates)
+
+Watchtower automatically updates your containers when new images are available.
+
+**Default schedule:** 4 AM daily
+
+**Configuration:**
+- `WATCHTOWER_SCHEDULE` — Cron expression for update checks
+- `WATCHTOWER_NOTIFICATIONS` — Enable notifications (shoutrrr format)
+- `WATCHTOWER_NOTIFICATION_URL` — Notification destination
+
+**Notification examples:**
+```bash
+# Discord webhook
+WATCHTOWER_NOTIFICATIONS=shoutrrr
+WATCHTOWER_NOTIFICATION_URL=discord://token@webhookid
+
+# Telegram
+WATCHTOWER_NOTIFICATION_URL=telegram://token@telegram?chats=chat-id
+```
+
+**Manual update check:**
+```bash
+docker exec watchtower /watchtower --run-once
+```
+
+**Exclude containers from auto-update:**
+Add label to the container:
+```yaml
+labels:
+  - "com.centurylinklabs.watchtower.enable=false"
+```
 
 ---
 
