@@ -214,6 +214,7 @@ services:
       - ${CONFIG_ROOT}/recyclarr:/config
     networks:
       - media
+      - downloads
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
