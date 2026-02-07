@@ -358,6 +358,7 @@ services:
       - ${IMMICH_EXTERNAL_2:-/dev/null}:/mnt/external/library2:ro
       - ${IMMICH_EXTERNAL_3:-/dev/null}:/mnt/external/library3:ro
       - ${IMMICH_EXTERNAL_4:-/dev/null}:/mnt/external/library4:ro
+      - ${IMMICH_EXTERNAL_5:-/dev/null}:/mnt/external/library5:ro
     depends_on:
       immich-redis:
         condition: service_healthy
