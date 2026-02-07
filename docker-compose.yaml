@@ -350,6 +350,11 @@ services:
     volumes:
       - ${IMMICH_UPLOAD_LOCATION}:/usr/src/app/upload
       - /etc/localtime:/etc/localtime:ro
+      # External libraries (read-only) - paths defined in .env
+      - ${IMMICH_EXTERNAL_1:-/dev/null}:/mnt/external/library1:ro
+      - ${IMMICH_EXTERNAL_2:-/dev/null}:/mnt/external/library2:ro
+      - ${IMMICH_EXTERNAL_3:-/dev/null}:/mnt/external/library3:ro
+      - ${IMMICH_EXTERNAL_4:-/dev/null}:/mnt/external/library4:ro
     depends_on:
       immich-redis:
         condition: service_healthy
