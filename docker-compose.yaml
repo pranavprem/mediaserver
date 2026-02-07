@@ -339,6 +339,8 @@ services:
   immich-server:
     image: ghcr.io/immich-app/immich-server:release
     container_name: immich-server
+    ports:
+      - "2283:2283"
     environment:
       - DB_HOSTNAME=immich-postgres
       - DB_USERNAME=${IMMICH_DB_USERNAME:-postgres}
