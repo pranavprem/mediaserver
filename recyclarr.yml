@@ -57,7 +57,7 @@ sonarr:
           - e2315f990da2e2cbfc9fa5b7a6c62e78  # LQ (Release Title)
           - 47435ece6b99a0b477caf360e79ba0bb  # x265 (HD)
           - fbcb31d8dabd2a319072b84fc0b7249c  # Extras
-        quality_profiles:
+        assign_scores_to:
           - name: WEB-1080p
             score: -10000
 
@@ -66,7 +66,7 @@ sonarr:
           - ec8fa7296b64e8cd390a1600f3c9dc7c  # Repack/Proper
           - eb3d5cc0a2be0db205fb823640db6a3c  # Repack2
           - 44e7c4de10ae50265753082e5dc76047  # Repack3
-        quality_profiles:
+        assign_scores_to:
           - name: WEB-1080p
             score: 5
 
@@ -85,7 +85,7 @@ sonarr:
           - b2b980877494b560443631eb1f473867  # PMTP
           - 1656adc6d7bb2c8cca6acfb6592db421  # PCOK
           - c67a75ae4a1715f2bb4d492f17f5c9d0  # STAN
-        quality_profiles:
+        assign_scores_to:
           - name: WEB-1080p
             score: 50
 
@@ -99,7 +99,7 @@ sonarr:
           - 3497799d29a085e2ac2df9d468413c94  # HDR10
           - 3e2c4e748b64a1a1118e0ea3f4cf6875  # HDR
           - bb019e1cd00f304f80971c965de064dc  # HLG
-        quality_profiles:
+        assign_scores_to:
           - name: WEB-1080p
             score: 100
 
@@ -154,7 +154,7 @@ radarr:
           - b8cd450cbfa689c0259a01d9e29ba3d6  # 3D
           - 0a3f082873eb454bde444150b70253cc  # Extras
           - cae4ca30163749b891686f95532519bd  # AV1 (unsupported on most devices)
-        quality_profiles:
+        assign_scores_to:
           - name: HD Bluray + WEB
             score: -10000
 
@@ -162,7 +162,7 @@ radarr:
       - trash_ids:
           - e7718d7a3ce595f289bfee26adc178f5  # Repack/Proper
           - ae43b294509409a6a13919dedd4764c4  # Repack2
-        quality_profiles:
+        assign_scores_to:
           - name: HD Bluray + WEB
             score: 5
 
@@ -176,7 +176,7 @@ radarr:
           - 957d0f44b592285f26449575e8b1167e  # Special Edition
           - eecf3a857724171f968a66cb5719e152  # IMAX
           - 9f6cbff8cfe4ebbc1bde14c7b7bec0de  # IMAX Enhanced
-        quality_profiles:
+        assign_scores_to:
           - name: HD Bluray + WEB
             score: 25
 
@@ -196,7 +196,7 @@ radarr:
           - c9fd353f8f5f1baf56dc601c4cb29920  # PCOK
           - e36a0ba1bc902b26ee40818a1d59b8bd  # PMTP
           - bf7e73dd1d85b12cc527dc619761c840  # STAN
-        quality_profiles:
+        assign_scores_to:
           - name: HD Bluray + WEB
             score: 50
 
@@ -216,7 +216,7 @@ radarr:
           - 1c1a4c5e823891c75bc50380a6866f73  # DTS
           - 240770601cc226190c367ef59aba7463  # ACC
           - c2998bd0d90ed5621d8df281e839436e  # DD
-        quality_profiles:
+        assign_scores_to:
           - name: HD Bluray + WEB
             score: 0  # Audio doesn't affect score, just metadata
 
@@ -230,6 +230,6 @@ radarr:
           - dfb86d5941bc9075d6af23b09c2c9307  # HDR10
           - e61e28db95d22bedcadf030b8f156c96  # HDR
           - b17886cb4158d9fea189859409975c19  # HLG
-        quality_profiles:
+        assign_scores_to:
           - name: HD Bluray + WEB
             score: 100
