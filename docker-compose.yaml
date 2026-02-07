@@ -350,6 +350,11 @@ services:
     volumes:
       - ${IMMICH_UPLOAD_LOCATION}:/usr/src/app/upload
       - /etc/localtime:/etc/localtime:ro
+      # External libraries (read-only, existing photos)
+      - /home/Pranav/photos:/mnt/external/photos:ro
+      - "/home/Pranav/CloudDrives/GoogleCloud/pranavprem93/Maldives Photos:/mnt/external/maldives:ro"
+      - "/home/Pranav/CloudDrives/GoogleCloud/pranavprem93/Saved from Chrome:/mnt/external/chrome-saved:ro"
+      - "/home/Pranav/CloudDrives/GoogleCloud/vanarp96/images moto x:/mnt/external/moto-x:ro"
     depends_on:
       immich-redis:
         condition: service_healthy
