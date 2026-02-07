@@ -380,7 +380,7 @@ Portainer provides a web UI for managing your Docker containers.
 
 Gitea provides a lightweight self-hosted Git server — useful for private repos, backups, and agent memory storage.
 
-**Access:** `http://NAS_IP:3000` or via Cloudflare tunnel at `git.pranavprem.com`
+**Access:** `http://10.0.0.116:41234` (LAN only, not exposed to internet)
 
 ### First-time setup
 
@@ -392,28 +392,25 @@ Gitea provides a lightweight self-hosted Git server — useful for private repos
 
 2. Add to `.env`:
    ```bash
-   GITEA_PORT=3000
-   GITEA_ROOT_URL=https://git.pranavprem.com
+   NAS_IP=10.0.0.116
+   GITEA_PORT=41234
    GITEA_DISABLE_REGISTRATION=false  # temporarily for setup
    ```
 
-3. Configure Cloudflare tunnel:
-   - Add route: `git.pranavprem.com` → `http://gitea:3000`
-
-4. Deploy and access:
+3. Deploy:
    ```bash
    docker compose up -d gitea
    ```
 
-5. Create your admin account at the setup page
+4. Access `http://10.0.0.116:41234` and create your admin account
 
-6. **After setup:** Set `GITEA_DISABLE_REGISTRATION=true` and redeploy
+5. **After setup:** Set `GITEA_DISABLE_REGISTRATION=true` and redeploy
 
 ### Pushing to Gitea
 
-From any machine:
+From any machine on the LAN:
 ```bash
-git remote add nas https://git.pranavprem.com/username/repo.git
+git remote add nas http://10.0.0.116:41234/username/repo.git
 git push nas main
 ```
 
@@ -422,8 +419,11 @@ git push nas main
 Neo backs up his SQLite memory database here for durability:
 ```bash
 cd ~/.openclaw
-git remote add nas https://git.pranavprem.com/neo/memory.git
-git push nas main
+git init
+git add neo-memory.db
+git commit -m "Memory backup"
+git remote add nas http://10.0.0.116:41234/pranav/neo-memory.git
+git push -u nas main
 ```
 
 ---
