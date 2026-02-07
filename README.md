@@ -376,6 +376,58 @@ Portainer provides a web UI for managing your Docker containers.
 
 ---
 
+## Gitea (self-hosted Git)
+
+Gitea provides a lightweight self-hosted Git server — useful for private repos, backups, and agent memory storage.
+
+**Access:** `http://NAS_IP:3000` or via Cloudflare tunnel at `git.pranavprem.com`
+
+### First-time setup
+
+1. Create config folder:
+   ```bash
+   mkdir -p /volume1/media/config/gitea
+   chown -R 1000:100 /volume1/media/config/gitea
+   ```
+
+2. Add to `.env`:
+   ```bash
+   GITEA_PORT=3000
+   GITEA_ROOT_URL=https://git.pranavprem.com
+   GITEA_DISABLE_REGISTRATION=false  # temporarily for setup
+   ```
+
+3. Configure Cloudflare tunnel:
+   - Add route: `git.pranavprem.com` → `http://gitea:3000`
+
+4. Deploy and access:
+   ```bash
+   docker compose up -d gitea
+   ```
+
+5. Create your admin account at the setup page
+
+6. **After setup:** Set `GITEA_DISABLE_REGISTRATION=true` and redeploy
+
+### Pushing to Gitea
+
+From any machine:
+```bash
+git remote add nas https://git.pranavprem.com/username/repo.git
+git push nas main
+```
+
+### Neo's memory backup
+
+Neo backs up his SQLite memory database here for durability:
+```bash
+cd ~/.openclaw
+git remote add nas https://git.pranavprem.com/neo/memory.git
+git push nas main
+```
+
+---
+
 ## Vaultwarden (password manager)
 
 Vaultwarden is accessible via the Cloudflare tunnel at **vault.pranavprem.com**.

@@ -453,6 +453,33 @@ services:
       timeout: 10s
       retries: 3
 
+  gitea:
+    image: gitea/gitea:latest
+    container_name: gitea
+    environment:
+      - USER_UID=${PUID}
+      - USER_GID=${PGID}
+      - TZ=${TZ}
+      - GITEA__database__DB_TYPE=sqlite3
+      - GITEA__server__ROOT_URL=${GITEA_ROOT_URL:-http://localhost:3000}
+      - GITEA__server__DISABLE_SSH=true
+      - GITEA__service__DISABLE_REGISTRATION=${GITEA_DISABLE_REGISTRATION:-true}
+    volumes:
+      - ${CONFIG_ROOT}/gitea:/data
+    ports:
+      - ${GITEA_PORT:-3000}:3000
+    networks:
+      - management
+      - proxy
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   watchtower:
     image: containrrr/watchtower:latest
     container_name: watchtower
