@@ -53,9 +53,10 @@ services:
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "/gluetun-entrypoint", "healthcheck"]
-      interval: 30s
+      interval: 10s
       timeout: 10s
-      retries: 3
+      retries: 5
+      start_period: 60s
 
   cloudflared:
     image: cloudflare/cloudflared:latest
