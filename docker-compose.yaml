@@ -308,8 +308,6 @@ services:
   vaultwarden:
     image: vaultwarden/server:latest
     container_name: vaultwarden
-    ports:
-      - "7777:7777"
     user: ${PUID}:${PGID}
     environment:
       - DOMAIN=${VAULTWARDEN_DOMAIN}
