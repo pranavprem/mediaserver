@@ -533,6 +533,5 @@ networks:
     driver: bridge
   immich:
     driver: bridge
-    internal: true
   management:
     driver: bridge
