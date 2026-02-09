@@ -380,6 +380,9 @@ services:
   immich-machine-learning:
     image: ghcr.io/immich-app/immich-machine-learning:release
     container_name: immich-machine-learning
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     environment:
       - TZ=${TZ}
     volumes:
