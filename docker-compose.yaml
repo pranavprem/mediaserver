@@ -24,8 +24,6 @@ services:
   gluetun:
     image: qmcgaw/gluetun:latest
     container_name: gluetun
-    labels:
-      - "com.centurylinklabs.watchtower.enable=false"
     cap_add:
       - NET_ADMIN
     devices:
