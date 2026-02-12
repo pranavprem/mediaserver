@@ -41,9 +41,6 @@ services:
       - ${QBITTORRENT_TORRENT_PORT}:${QBITTORRENT_TORRENT_PORT}/tcp
       - ${QBITTORRENT_PORT}:${QBITTORRENT_PORT}
       - ${SABNZBD_PORT}:8080
-      - ${PROWLARR_PORT}:${PROWLARR_PORT}
-      - ${RADARR_PORT}:${RADARR_PORT}
-      - ${SONARR_PORT}:${SONARR_PORT}
     volumes:
       - ${CONFIG_ROOT}/gluetun:/gluetun
     networks:
@@ -142,18 +139,17 @@ services:
   prowlarr:
     image: lscr.io/linuxserver/prowlarr:latest
     container_name: prowlarr
-    labels:
-      - "com.centurylinklabs.watchtower.depends-on=gluetun"
-    network_mode: service:gluetun
+    ports:
+      - ${PROWLARR_PORT}:${PROWLARR_PORT}
     environment:
       - PUID=${PUID}
       - PGID=${PGID}
       - TZ=${TZ}
     volumes:
       - ${CONFIG_ROOT}/prowlarr:/config
-    depends_on:
-      gluetun:
-        condition: service_healthy
+    networks:
+      - arr
+      - downloads
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
@@ -166,9 +162,8 @@ services:
   radarr:
     image: lscr.io/linuxserver/radarr:latest
     container_name: radarr
-    labels:
-      - "com.centurylinklabs.watchtower.depends-on=gluetun"
-    network_mode: service:gluetun
+    ports:
+      - ${RADARR_PORT}:${RADARR_PORT}
     environment:
       - PUID=${PUID}
       - PGID=${PGID}
@@ -177,9 +172,9 @@ services:
       - ${CONFIG_ROOT}/radarr:/config
       - ${DOWNLOADS_ROOT}:/downloads
       - ${MOVIES_ROOT}:/movies
-    depends_on:
-      gluetun:
-        condition: service_healthy
+    networks:
+      - arr
+      - downloads
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
@@ -192,9 +187,8 @@ services:
   sonarr:
     image: lscr.io/linuxserver/sonarr:latest
     container_name: sonarr
-    labels:
-      - "com.centurylinklabs.watchtower.depends-on=gluetun"
-    network_mode: service:gluetun
+    ports:
+      - ${SONARR_PORT}:${SONARR_PORT}
     environment:
       - PUID=${PUID}
       - PGID=${PGID}
@@ -203,9 +197,9 @@ services:
       - ${CONFIG_ROOT}/sonarr:/config
       - ${DOWNLOADS_ROOT}:/downloads
       - ${TV_ROOT}:/tv
-    depends_on:
-      gluetun:
-        condition: service_healthy
+    networks:
+      - arr
+      - downloads
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
@@ -224,7 +218,7 @@ services:
       - ${CONFIG_ROOT}/recyclarr:/config
     networks:
       - media
-      - downloads
+      - arr
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
@@ -527,7 +521,8 @@ services:
 # ╭──────────────────────────────────────────────────────────────────────────────╮
 # │  Networks - Isolated by function                                             │
 # │                                                                              │
-# │  downloads  - VPN-tunneled services (gluetun + clients)                      │
+# │  downloads  - VPN-tunneled download clients (gluetun + qBit + SAB)            │
+# │  arr        - Arr stack (Sonarr, Radarr, Prowlarr) - LAN only                │
 # │  media      - Media servers and management                                   │
 # │  proxy      - Services exposed via Cloudflare tunnel                         │
 # │  immich     - Photo stack (isolated DB/Redis)                                │
@@ -537,6 +532,9 @@ services:
 networks:
   downloads:
     driver: bridge
+  arr:
+    driver: bridge
+    internal: false
   media:
     driver: bridge
   proxy:
