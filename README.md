@@ -31,18 +31,18 @@ Services are isolated into purpose-specific networks:
 
 | Network | Purpose | Containers |
 |---------|---------|------------|
-| `downloads` | VPN-tunneled traffic | gluetun, qbittorrent, sabnzbd, prowlarr, radarr, sonarr |
+| `downloads` | VPN-tunneled traffic | gluetun, qbittorrent, sabnzbd, prowlarr, radarr, sonarr, recyclarr |
 | `media` | Media streaming & management | jellyfin, jellyseerr, plex, recyclarr |
 | `proxy` | Cloudflare tunnel access | cloudflared, jellyfin, jellyseerr, plex, vaultwarden, immich-server |
-| `immich` | Photo stack (internal) | immich-*, postgres, redis |
-| `management` | Container management | portainer, watchtower |
+| `immich` | Photo stack (DB/Redis isolated, network has internet access for ML model downloads) | immich-*, postgres, redis |
+| `management` | Container management | portainer, watchtower, gitea |
 
 ### Security Features
 
 - ✅ All containers have `security_opt: no-new-privileges`
 - ✅ All containers have health checks
 - ✅ VPN kill switch (gluetun firewall)
-- ✅ Immich database isolated from other services
+- ✅ Immich database isolated from other services (immich network has internet access for ML model downloads; DB/Redis remain internal to the stack)
 - ✅ Docker socket mounted read-only where needed
 - ✅ Services depend on healthy upstream containers
 
@@ -189,7 +189,9 @@ docker compose logs -f --tail=200
 
 ### qBittorrent: stop the random password resets
 
-**Symptom:** qBit generates a new temporary password on restart.
+**Symptom:** qBit generates a new temporary password on every restart.
+
+⚠️ **IMPORTANT:** You MUST set a permanent password through the WebUI on first run. If you don't, qBittorrent will generate a new random temporary password on every single restart, locking you out each time.
 
 **Fix:**
 1. Grab temp password:
@@ -197,7 +199,8 @@ docker compose logs -f --tail=200
    docker logs qbittorrent 2>&1 | grep -i "temporary password" -n
    ```
 2. Log into qBit WebUI (example): `http://NAS_IP:8888`
-3. Set a permanent password: **Tools → Options → Web UI → set username/password**.
+3. **Immediately** set a permanent password: **Tools → Options → Web UI → set username/password → Save**
+4. Verify it persists by restarting: `docker compose restart qbittorrent` and logging in again.
 
 ### SABnzbd: internal vs external port (critical)
 
@@ -216,6 +219,14 @@ Prowlarr syncs indexers to Sonarr/Radarr, but not download clients.
 **So you must:**
 - Add NZBGeek + any torrent indexers in Prowlarr.
 - Add qBittorrent and SABnzbd as download clients in Sonarr/Radarr manually.
+
+### Download Client Priority (prefer Usenet over torrents)
+
+In Sonarr/Radarr → **Settings → Download Clients**, set priorities to prefer Usenet:
+- **SABnzbd:** Priority **1** (preferred)
+- **qBittorrent:** Priority **50** (fallback)
+
+This ensures Usenet is tried first (faster, no seeding required), with torrents as a fallback when Usenet doesn't have the release.
 
 ### Remote Path Mappings (Usenet import failures)
 
@@ -323,25 +334,31 @@ Recyclarr automatically syncs quality profiles from the TRaSH guides to your Son
    nano /volume1/media/config/recyclarr/recyclarr.yml
    ```
 
-3. Add your Sonarr/Radarr API keys and URLs. Example:
+3. Add your Sonarr/Radarr API keys and URLs. Recyclarr is on the `downloads` network so it can reach gluetun directly. Use the v8+ config schema (`assign_scores_to` instead of the old `quality_profiles`):
    ```yaml
    sonarr:
      main:
-       base_url: http://172.17.0.1:8989
+       base_url: http://gluetun:8989
        api_key: your-sonarr-api-key
        quality_definition:
          type: series
-       quality_profiles:
-         - name: WEB-1080p
+       custom_formats:
+         - trash_ids:
+             - example-cf-id
+           assign_scores_to:
+             - name: WEB-1080p
    
    radarr:
      main:
-       base_url: http://172.17.0.1:7878
+       base_url: http://gluetun:7878
        api_key: your-radarr-api-key
        quality_definition:
          type: movie
-       quality_profiles:
-         - name: HD Bluray + WEB
+       custom_formats:
+         - trash_ids:
+             - example-cf-id
+           assign_scores_to:
+             - name: HD Bluray + WEB
    ```
 
 4. Test sync:
@@ -455,7 +472,11 @@ Immich runs in an isolated network (`immich`) with:
 - **Machine Learning** container (face recognition, smart search)
 - **Server** (API + web interface)
 
-Only `immich-server` is on the proxy network (for Cloudflare tunnel access). Database and Redis are isolated.
+Only `immich-server` is on the proxy network (for Cloudflare tunnel access). Database and Redis are isolated within the immich network.
+
+The ML container has explicit DNS configured (`8.8.8.8`, `1.1.1.1`) to ensure it can download ML models on first run.
+
+**LAN access:** Port 2283 is exposed directly — access at `http://NAS_IP:2283`.
 
 ### First-time setup
 
@@ -484,9 +505,21 @@ Only `immich-server` is on the proxy network (for Cloudflare tunnel access). Dat
 
 5. Create your admin account at https://photos.pranavprem.com
 
+### External Libraries
+
+Immich supports mounting external photo libraries as read-only. Configure up to 5 via environment variables in `.env`:
+
+```bash
+IMMICH_EXTERNAL_1=/path/to/library1
+IMMICH_EXTERNAL_2=/path/to/library2
+# IMMICH_EXTERNAL_3 through IMMICH_EXTERNAL_5 available
+```
+
+These mount to `/mnt/external/library1` through `/mnt/external/library5` inside the container. Unset variables default to `/dev/null` (no mount). After adding, go to **Administration → External Libraries** in Immich to scan them.
+
 ### Mobile app setup
 
-Download Immich app (iOS/Android), use `https://photos.pranavprem.com` as the server URL.
+Download Immich app (iOS/Android), use `https://photos.pranavprem.com` as the server URL. For LAN access (faster uploads), use `http://NAS_IP:2283` as the local URL in the app settings.
 
 ### Backup strategy
 
@@ -528,6 +561,11 @@ Add label to the container:
 ```yaml
 labels:
   - "com.centurylinklabs.watchtower.enable=false"
+```
+
+**⚠️ Gluetun is excluded from Watchtower** — it has `watchtower.enable=false` because Watchtower can't handle `network_mode: service:` dependencies properly (updating gluetun would kill all containers that depend on it). Update gluetun manually:
+```bash
+docker compose pull gluetun && docker compose up -d
 ```
 
 ---
