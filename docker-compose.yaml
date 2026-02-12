@@ -83,6 +83,8 @@ services:
   qbittorrent:
     image: lscr.io/linuxserver/qbittorrent:latest
     container_name: qbittorrent
+    labels:
+      - "com.centurylinklabs.watchtower.depends-on=gluetun"
     network_mode: service:gluetun
     environment:
       - PUID=${PUID}
@@ -107,6 +109,8 @@ services:
   sabnzbd:
     image: lscr.io/linuxserver/sabnzbd:latest
     container_name: sabnzbd
+    labels:
+      - "com.centurylinklabs.watchtower.depends-on=gluetun"
     network_mode: service:gluetun
     environment:
       - PUID=${PUID}
@@ -138,6 +142,8 @@ services:
   prowlarr:
     image: lscr.io/linuxserver/prowlarr:latest
     container_name: prowlarr
+    labels:
+      - "com.centurylinklabs.watchtower.depends-on=gluetun"
     network_mode: service:gluetun
     environment:
       - PUID=${PUID}
@@ -160,6 +166,8 @@ services:
   radarr:
     image: lscr.io/linuxserver/radarr:latest
     container_name: radarr
+    labels:
+      - "com.centurylinklabs.watchtower.depends-on=gluetun"
     network_mode: service:gluetun
     environment:
       - PUID=${PUID}
@@ -184,6 +192,8 @@ services:
   sonarr:
     image: lscr.io/linuxserver/sonarr:latest
     container_name: sonarr
+    labels:
+      - "com.centurylinklabs.watchtower.depends-on=gluetun"
     network_mode: service:gluetun
     environment:
       - PUID=${PUID}
