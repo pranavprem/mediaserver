@@ -11,7 +11,7 @@
 # ─── SONARR ──────────────────────────────────────────────────────────────────
 sonarr:
   series:
-    base_url: http://sonarr:8989
+    base_url: http://gluetun:8989
     api_key: YOUR_SONARR_API_KEY_HERE
     
     # Delete custom formats not in this config
@@ -102,7 +102,7 @@ sonarr:
 # ─── RADARR ──────────────────────────────────────────────────────────────────
 radarr:
   movies:
-    base_url: http://radarr:7878
+    base_url: http://gluetun:7878
     api_key: YOUR_RADARR_API_KEY_HERE
 
     delete_old_custom_formats: true
