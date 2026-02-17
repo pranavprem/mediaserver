@@ -463,7 +463,6 @@ services:
       - ${CONFIG_ROOT}/portainer:/data
     ports:
       - ${PORTAINER_PORT:-9000}:9000
-      - 9443:9443
     networks:
       - management
     security_opt:
