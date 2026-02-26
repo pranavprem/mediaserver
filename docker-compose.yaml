@@ -521,6 +521,113 @@ services:
     restart: unless-stopped
 
 # ╭──────────────────────────────────────────────────────────────────────────────╮
+# │  ░█▄█░█▀█░█▀█░▀█▀░▀█▀░█▀█░█▀▄░▀█▀░█▀█░█▀▀                                    │
+# │  ░█░█░█░█░█░█░░█░░░█░░█░█░█▀▄░░█░░█░█░█░█                                    │
+# │  ░▀░▀░▀▀▀░▀░▀░▀▀▀░░▀░░▀▀▀░▀░▀░▀▀▀░▀░▀░▀▀▀                                    │
+# │  Observability - Logs, Metrics, Dashboards                                   │
+# ╰──────────────────────────────────────────────────────────────────────────────╯
+
+  # ─── Logs ───
+  dozzle:
+    image: amir20/dozzle:latest
+    container_name: dozzle
+    ports:
+      - ${DOZZLE_PORT:-9999}:8080
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - monitoring
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/dozzle", "healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ─── Metrics Collection ───
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - ${PROMETHEUS_PORT:-9090}:9090
+    volumes:
+      - ${CONFIG_ROOT}/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=30d'
+      - '--storage.tsdb.retention.size=5GB'
+    networks:
+      - monitoring
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:9090/-/healthy || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ─── Container Metrics ───
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks:
+      - monitoring
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  # ─── System Metrics ───
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    command:
+      - '--path.rootfs=/host'
+    volumes:
+      - /:/host:ro,rslave
+    networks:
+      - monitoring
+    pid: host
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  # ─── Dashboards & Alerting ───
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - ${GRAFANA_PORT:-3333}:3000
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_INSTALL_PLUGINS=grafana-clock-panel
+      - TZ=${TZ}
+    volumes:
+      - grafana-data:/var/lib/grafana
+    networks:
+      - monitoring
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+# ╭──────────────────────────────────────────────────────────────────────────────╮
 # │  Networks - Isolated by function                                             │
 # │                                                                              │
 # │  downloads  - VPN-tunneled services (gluetun + clients + arrs)                │
@@ -528,6 +635,7 @@ services:
 # │  proxy      - Services exposed via Cloudflare tunnel                         │
 # │  immich     - Photo stack (isolated DB/Redis)                                │
 # │  management - Portainer, Watchtower (docker.sock access)                     │
+# │  monitoring - Prometheus, Grafana, cAdvisor, Dozzle                          │
 # ╰──────────────────────────────────────────────────────────────────────────────╯
 
 networks:
@@ -541,3 +649,9 @@ networks:
     driver: bridge
   management:
     driver: bridge
+  monitoring:
+    driver: bridge
+
+volumes:
+  prometheus-data:
+  grafana-data:
