@@ -1,0 +1,370 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "links": [],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "title": "🖥️ NAS System",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 60 }, { "color": "red", "value": 85 }] },
+          "unit": "percent", "min": 0, "max": 100
+        }
+      },
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 1 },
+      "id": 1,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "showThresholdLabels": false, "showThresholdMarkers": true },
+      "title": "CPU Usage",
+      "type": "gauge",
+      "targets": [{ "expr": "100 - (avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)", "legendFormat": "CPU" }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 60 }, { "color": "red", "value": 85 }] },
+          "unit": "percent", "min": 0, "max": 100
+        }
+      },
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 1 },
+      "id": 2,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "showThresholdLabels": false, "showThresholdMarkers": true },
+      "title": "Memory Usage",
+      "type": "gauge",
+      "targets": [{ "expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100", "legendFormat": "RAM" }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 70 }, { "color": "red", "value": 90 }] },
+          "unit": "percent", "min": 0, "max": 100
+        }
+      },
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 1 },
+      "id": 3,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "showThresholdLabels": false, "showThresholdMarkers": true },
+      "title": "Disk Usage",
+      "type": "gauge",
+      "targets": [{ "expr": "(1 - (node_filesystem_avail_bytes{mountpoint=\"/\",fstype!=\"tmpfs\"} / node_filesystem_size_bytes{mountpoint=\"/\",fstype!=\"tmpfs\"})) * 100", "legendFormat": "Disk" }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "decbytes" } },
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 1 },
+      "id": 4,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "title": "Network I/O",
+      "type": "stat",
+      "targets": [
+        { "expr": "rate(node_network_receive_bytes_total{device!~\"lo|veth.*|br-.*|docker.*\"}[5m])", "legendFormat": "↓ RX" },
+        { "expr": "rate(node_network_transmit_bytes_total{device!~\"lo|veth.*|br-.*|docker.*\"}[5m])", "legendFormat": "↑ TX" }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 7 },
+      "id": 101,
+      "title": "🔒 VPN & Downloads (gluetun + qBit + SABnzbd)",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100, "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 80 }] } } },
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 8 },
+      "id": 10,
+      "title": "CPU - Downloads",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "rate(container_cpu_usage_seconds_total{name=~\"gluetun|qbittorrent|sabnzbd\"}[5m]) * 100", "legendFormat": "{{name}}" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "decbytes" } },
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 8 },
+      "id": 11,
+      "title": "Memory - Downloads",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "container_memory_usage_bytes{name=~\"gluetun|qbittorrent|sabnzbd\"}", "legendFormat": "{{name}}" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "Bps" } },
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 8 },
+      "id": 12,
+      "title": "Network - Downloads",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "rate(container_network_receive_bytes_total{name=~\"gluetun|qbittorrent|sabnzbd\"}[5m])", "legendFormat": "{{name}} ↓" },
+        { "expr": "rate(container_network_transmit_bytes_total{name=~\"gluetun|qbittorrent|sabnzbd\"}[5m])", "legendFormat": "{{name}} ↑" }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 },
+      "id": 102,
+      "title": "📡 Arr Stack (Prowlarr + Sonarr + Radarr + Recyclarr)",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 } },
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 15 },
+      "id": 20,
+      "title": "CPU - Arr Stack",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "rate(container_cpu_usage_seconds_total{name=~\"prowlarr|sonarr|radarr|recyclarr\"}[5m]) * 100", "legendFormat": "{{name}}" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "decbytes" } },
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 15 },
+      "id": 21,
+      "title": "Memory - Arr Stack",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "container_memory_usage_bytes{name=~\"prowlarr|sonarr|radarr|recyclarr\"}", "legendFormat": "{{name}}" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "Bps" } },
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 15 },
+      "id": 22,
+      "title": "Network - Arr Stack",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "rate(container_network_receive_bytes_total{name=~\"prowlarr|sonarr|radarr|recyclarr\"}[5m])", "legendFormat": "{{name}} ↓" },
+        { "expr": "rate(container_network_transmit_bytes_total{name=~\"prowlarr|sonarr|radarr|recyclarr\"}[5m])", "legendFormat": "{{name}} ↑" }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 21 },
+      "id": 103,
+      "title": "🎬 Media Servers (Jellyfin + Plex + Jellyseerr)",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 } },
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 22 },
+      "id": 30,
+      "title": "CPU - Media Servers",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "rate(container_cpu_usage_seconds_total{name=~\"jellyfin|plex|jellyseerr\"}[5m]) * 100", "legendFormat": "{{name}}" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "decbytes" } },
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 22 },
+      "id": 31,
+      "title": "Memory - Media Servers",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "container_memory_usage_bytes{name=~\"jellyfin|plex|jellyseerr\"}", "legendFormat": "{{name}}" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "Bps" } },
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 22 },
+      "id": 32,
+      "title": "Network - Media Servers",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "rate(container_network_receive_bytes_total{name=~\"jellyfin|plex|jellyseerr\"}[5m])", "legendFormat": "{{name}} ↓" },
+        { "expr": "rate(container_network_transmit_bytes_total{name=~\"jellyfin|plex|jellyseerr\"}[5m])", "legendFormat": "{{name}} ↑" }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 28 },
+      "id": 104,
+      "title": "📸 Immich (Photos)",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 } },
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 29 },
+      "id": 40,
+      "title": "CPU - Immich",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "rate(container_cpu_usage_seconds_total{name=~\"immich-server|immich-machine-learning|immich-postgres|immich-redis\"}[5m]) * 100", "legendFormat": "{{name}}" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "decbytes" } },
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 29 },
+      "id": 41,
+      "title": "Memory - Immich",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "container_memory_usage_bytes{name=~\"immich-server|immich-machine-learning|immich-postgres|immich-redis\"}", "legendFormat": "{{name}}" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "Bps" } },
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 29 },
+      "id": 42,
+      "title": "Network - Immich",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "rate(container_network_receive_bytes_total{name=~\"immich-server|immich-machine-learning|immich-postgres|immich-redis\"}[5m])", "legendFormat": "{{name}} ↓" },
+        { "expr": "rate(container_network_transmit_bytes_total{name=~\"immich-server|immich-machine-learning|immich-postgres|immich-redis\"}[5m])", "legendFormat": "{{name}} ↑" }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 35 },
+      "id": 105,
+      "title": "🔐 Security & Services (Vaultwarden + Cloudflared)",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 } },
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 36 },
+      "id": 50,
+      "title": "CPU - Security",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "rate(container_cpu_usage_seconds_total{name=~\"vaultwarden|cloudflared\"}[5m]) * 100", "legendFormat": "{{name}}" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "decbytes" } },
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 36 },
+      "id": 51,
+      "title": "Memory - Security",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "container_memory_usage_bytes{name=~\"vaultwarden|cloudflared\"}", "legendFormat": "{{name}}" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "Bps" } },
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 36 },
+      "id": 52,
+      "title": "Network - Security",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "rate(container_network_receive_bytes_total{name=~\"vaultwarden|cloudflared\"}[5m])", "legendFormat": "{{name}} ↓" },
+        { "expr": "rate(container_network_transmit_bytes_total{name=~\"vaultwarden|cloudflared\"}[5m])", "legendFormat": "{{name}} ↑" }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 42 },
+      "id": 106,
+      "title": "🛠️ Management (Portainer + Watchtower + Gitea)",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 } },
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 43 },
+      "id": 60,
+      "title": "CPU - Management",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "rate(container_cpu_usage_seconds_total{name=~\"portainer|watchtower|gitea\"}[5m]) * 100", "legendFormat": "{{name}}" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "decbytes" } },
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 43 },
+      "id": 61,
+      "title": "Memory - Management",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "container_memory_usage_bytes{name=~\"portainer|watchtower|gitea\"}", "legendFormat": "{{name}}" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "Bps" } },
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 43 },
+      "id": 62,
+      "title": "Network - Management",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "rate(container_network_receive_bytes_total{name=~\"portainer|watchtower|gitea\"}[5m])", "legendFormat": "{{name}} ↓" },
+        { "expr": "rate(container_network_transmit_bytes_total{name=~\"portainer|watchtower|gitea\"}[5m])", "legendFormat": "{{name}} ↑" }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 49 },
+      "id": 107,
+      "title": "📊 Monitoring (Prometheus + Grafana + cAdvisor)",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 } },
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 50 },
+      "id": 70,
+      "title": "CPU - Monitoring",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "rate(container_cpu_usage_seconds_total{name=~\"prometheus|grafana|cadvisor|node-exporter|dozzle\"}[5m]) * 100", "legendFormat": "{{name}}" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "decbytes" } },
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 50 },
+      "id": 71,
+      "title": "Memory - Monitoring",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "container_memory_usage_bytes{name=~\"prometheus|grafana|cadvisor|node-exporter|dozzle\"}", "legendFormat": "{{name}}" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "decbytes" } },
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 50 },
+      "id": 72,
+      "title": "Prometheus Storage",
+      "type": "stat",
+      "targets": [
+        { "expr": "prometheus_tsdb_storage_blocks_bytes", "legendFormat": "TSDB Size" }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["mediaserver", "docker", "nas"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "title": "VeryNAS Media Server",
+  "uid": "verynas-mediaserver",
+  "version": 1
+}
