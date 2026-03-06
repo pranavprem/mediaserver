@@ -4,22 +4,24 @@ I got a NAS and then decided to use it as a media server. In the process, I ende
 
 ---- The readme beyond this point is written by AI ----
 
-The intent: clone this repo onto a fresh NAS, follow the steps in order, and end up with the same working setup (including fixes for the exact problems that happened during the original build).
+Clone this repo onto a fresh NAS, follow the steps in order, and end up with the same working setup.
 
 ---
 
 ## What this stack does
 
-- Routes **download traffic** through ProtonVPN using `gluetun` + WireGuard.
-- Uses both **torrents** (qBittorrent) and **Usenet** (SABnzbd + Newshosting + NZBGeek).
-- Automates TV + Movies with Sonarr/Radarr, with indexers managed by Prowlarr.
-- **Recyclarr** auto-syncs quality profiles from TRaSH guides.
-- Provides a request UI with Jellyseerr that can drive Sonarr/Radarr and integrate with media servers.
-- Streams locally via Jellyfin; Plex can be added for devices that require it.
-- Self-hosted password manager (Vaultwarden) via Cloudflare tunnel.
-- Self-hosted photos (Immich) with ML-powered face recognition and smart search.
-- **Portainer** for container management UI.
-- **Watchtower** for automatic container updates.
+- Routes **download traffic** through ProtonVPN using `gluetun` + WireGuard
+- Uses both **torrents** (qBittorrent) and **Usenet** (SABnzbd) for downloads
+- Automates TV + Movies with Sonarr/Radarr, indexers managed by Prowlarr
+- **Recyclarr** auto-syncs quality profiles from TRaSH guides
+- Request UI with **Jellyseerr** driving Sonarr/Radarr
+- Streams via **Jellyfin** and **Plex**
+- Self-hosted password manager (**Vaultwarden**) via Cloudflare tunnel
+- Self-hosted photos (**Immich**) with ML-powered face recognition and smart search
+- **Portainer** for container management UI
+- **Watchtower** for automatic container updates (gluetun excluded — see below)
+- **Gitea** for self-hosted Git (LAN only)
+- **Observability stack**: Dozzle (logs), Prometheus + Grafana + cAdvisor + node-exporter (metrics)
 
 ---
 
@@ -27,149 +29,112 @@ The intent: clone this repo onto a fresh NAS, follow the steps in order, and end
 
 ### Network Isolation
 
-Services are isolated into purpose-specific networks:
-
 | Network | Purpose | Containers |
 |---------|---------|------------|
 | `downloads` | VPN-tunneled traffic | gluetun, qbittorrent, sabnzbd, prowlarr, radarr, sonarr, recyclarr |
 | `media` | Media streaming & management | jellyfin, jellyseerr, plex, recyclarr |
 | `proxy` | Cloudflare tunnel access | cloudflared, jellyfin, jellyseerr, plex, vaultwarden, immich-server |
-| `immich` | Photo stack (DB/Redis isolated, network has internet access for ML model downloads) | immich-*, postgres, redis |
+| `immich` | Photo stack (DB/Redis isolated) | immich-server, immich-machine-learning, immich-postgres, immich-redis |
 | `management` | Container management | portainer, watchtower, gitea |
+| `monitoring` | Observability stack | prometheus, grafana, cadvisor, node-exporter, dozzle |
 
 ### Security Features
 
 - ✅ All containers have `security_opt: no-new-privileges`
 - ✅ All containers have health checks
 - ✅ VPN kill switch (gluetun firewall)
-- ✅ Immich database isolated from other services (immich network has internet access for ML model downloads; DB/Redis remain internal to the stack)
 - ✅ Docker socket mounted read-only where needed
 - ✅ Services depend on healthy upstream containers
 
----
+### Gluetun & `network_mode: service:gluetun`
 
-## Service map (mental model)
+Services using `network_mode: "service:gluetun"` share gluetun's network namespace. This means:
 
-**Download path:**
-- Indexers configured in Prowlarr → synced to Sonarr/Radarr (indexers only).
-- Requests in Jellyseerr → Sonarr/Radarr → download client (qBit or SAB) → `/downloads` → import/move into `/tv` and `/movies` → Jellyfin library scan.
-
-**Networking rules learned the hard way:**
-- Any container using `network_mode: "service:gluetun"` **cannot publish its own ports**; ports must be exposed via the gluetun service.
-- SABnzbd listens on internal port **8080** (normal) even if the NAS exposes it on another port (example: 8383).
+- They **cannot publish their own ports** — ports must be exposed via gluetun's `ports:` section
+- If gluetun is recreated, all dependent containers get orphaned with a stale network namespace
+- **Watchtower cannot safely update gluetun** — use `make update-gluetun` instead (see Makefile section)
 
 ---
 
-## Repo expectations (what should exist)
+## Repo structure
 
 **In this repo (committed):**
-- `docker-compose.yaml`
-- `example.env` (template only, no secrets)
-- `README.md` (this file)
+- `docker-compose.yaml` — the full stack
+- `example.env` — template with all variables (no secrets)
+- `prometheus.yml` — Prometheus scrape config
+- `recyclarr.yml` — Recyclarr quality profiles (API key placeholders on public repo)
+- `grafana/` — provisioning configs and dashboard JSONs
+- `Makefile` — operational targets (see below)
+- `README.md`
 
 **On the NAS (NOT committed):**
-- `/volume1/media/config/*` (service databases, tokens, settings)
-- `/volume1/media/downloads/*`
-- `/volume1/media/movies/*`
-- `/volume1/media/tv/*`
-- `.env` (real secrets)
+- `.env` — real secrets (copy from `example.env`)
+- `${CONFIG_ROOT}/*` — service databases, tokens, settings
+- Media directories (downloads, movies, tv, photos)
 
 ---
 
-## Prereqs
+## Makefile
 
-- UGREEN OS with Docker + Docker Compose available.
-- ProtonVPN account with WireGuard credentials for gluetun.
-- Newshosting account and NZBGeek API key (Usenet pipeline used here).
-- Optional: domain for future remote access work.
+The Makefile reads `CONFIG_ROOT` from `.env` — no hardcoded paths.
+
+| Target | What it does |
+|--------|-------------|
+| `make sync-configs` | Copies prometheus.yml + recyclarr.yml to CONFIG_ROOT, fixes permissions, restarts both services |
+| `make sync-prometheus` | Syncs just prometheus.yml and restarts Prometheus |
+| `make sync-recyclarr` | Syncs just recyclarr.yml and restarts Recyclarr |
+| `make update-gluetun` | Pulls latest gluetun image, stops all 5 dependents, recreates gluetun, waits for healthy, restarts dependents |
+| `make help` | Shows available targets |
+
+**After editing any config file in the repo:** `git pull && make sync-configs`
+
+**Gluetun updates:** `make update-gluetun` (never use Watchtower for this)
 
 ---
 
-## Step 0 — Decide your paths and ports
+## Quick start
+
+### Step 0 — Paths
 
 This guide assumes:
 - Compose project folder: `/volume1/docker/mediaserver`
-- Persistent data root: `/volume1/media`
-- A non-8080 external port for SABnzbd UI (example: 8383) because 8080 is intentionally avoided.
+- Config root: `/volume1/media/config`
+- Media root: `/volume1/media`
 
----
-
-## Step 1 — Create folders (fresh NAS)
-
-Create the repo folder and the persistent folder structure:
+### Step 1 — Create folders
 
 ```bash
 mkdir -p /volume1/docker/mediaserver
 mkdir -p /volume1/media/{downloads,downloads/incomplete,movies,tv,photos}
-mkdir -p /volume1/media/config/{gluetun,qbittorrent,sabnzbd,prowlarr,sonarr,radarr,jellyfin,jellyseerr,plex,vaultwarden,portainer,recyclarr}
+mkdir -p /volume1/media/config/{gluetun,qbittorrent,sabnzbd,prowlarr,sonarr,radarr,jellyfin,jellyseerr,plex,vaultwarden,portainer,recyclarr,prometheus,gitea}
 mkdir -p /volume1/media/config/immich/{postgres,redis,model-cache}
 ```
 
----
-
-## Step 2 — Fix permissions (this caused the most pain)
-
-If permissions are wrong, you'll see issues like Jellyfin failing to start, *arr apps failing to import, or services not being able to write configs.
-
-### Determine your UID/GID
-
-On the NAS:
+### Step 2 — Permissions
 
 ```bash
+# Find your UID/GID
 id
-```
 
-During this build, the working values were:
-- UID (PUID): 1000
-- GID (PGID): 100
-
-(If yours differ, use your real values everywhere below.)
-
-### Apply ownership
-
-```bash
+# Apply ownership (adjust UID:GID if yours differ from 1000:100)
 chown -R 1000:100 /volume1/media
 ```
 
-### Verify
-
-```bash
-ls -ld /volume1/media /volume1/media/config /volume1/media/downloads
-```
-
----
-
-## Step 3 — Create .env and .env.example
-
-You want two files:
-- `.env` (real secrets) — never commit
-- `.env.example` (template) — commit
-
-Copy `example.env` to `.env` and fill in your values:
+### Step 3 — Environment
 
 ```bash
 cp example.env .env
 nano .env
+# Fill in all values — VPN creds, API keys, passwords
 ```
 
-### Generate secure passwords
-
+Generate secure passwords:
 ```bash
-# For Immich database
-openssl rand -base64 32
-
-# For Immich Redis  
-openssl rand -base64 32
-
-# For Vaultwarden admin token
-docker run --rm -it vaultwarden/server /vaultwarden hash
+openssl rand -base64 32                                    # Immich DB/Redis passwords
+docker run --rm -it vaultwarden/server /vaultwarden hash   # Vaultwarden admin token
 ```
 
----
-
-## Step 4 — Deploy
-
-From the repo folder:
+### Step 4 — Deploy
 
 ```bash
 cd /volume1/docker/mediaserver
@@ -177,401 +142,150 @@ docker compose up -d
 docker compose ps
 ```
 
-**Logs when something won't start:**
+### Step 5 — Sync configs
 
 ```bash
-docker compose logs -f --tail=200
+make sync-configs
 ```
+
+This copies `prometheus.yml` and `recyclarr.yml` to the right places under `CONFIG_ROOT` and restarts the services.
 
 ---
 
-## Step 5 — First-run configuration checklist
+## First-run configuration
 
-### qBittorrent: stop the random password resets
+### qBittorrent — Set a permanent password!
 
-**Symptom:** qBit generates a new temporary password on every restart.
+⚠️ qBit generates a random temp password on every restart until you set one through the WebUI.
 
-⚠️ **IMPORTANT:** You MUST set a permanent password through the WebUI on first run. If you don't, qBittorrent will generate a new random temporary password on every single restart, locking you out each time.
+```bash
+docker logs qbittorrent 2>&1 | grep "temporary password"
+```
 
-**Fix:**
-1. Grab temp password:
-   ```bash
-   docker logs qbittorrent 2>&1 | grep -i "temporary password" -n
-   ```
-2. Log into qBit WebUI (example): `http://NAS_IP:8888`
-3. **Immediately** set a permanent password: **Tools → Options → Web UI → set username/password → Save**
-4. Verify it persists by restarting: `docker compose restart qbittorrent` and logging in again.
+Log in at `http://NAS_IP:8888` → **Tools → Options → Web UI** → set username/password → **Save**.
 
-### SABnzbd: internal vs external port (critical)
+### SABnzbd — Internal port
 
-**Facts:**
-- SABnzbd listens on internal port 8080 (expected).
-- You access it from LAN via `http://NAS_IP:${SABNZBD_PORT}` (example: 8383).
+SABnzbd listens on internal port **8080**. Since it uses `network_mode: service:gluetun`, its UI port is published via gluetun's ports section.
 
-**If SAB UI doesn't load on the NAS port:**
-- This stack used `network_mode: "service:gluetun"` for SABnzbd, so SAB cannot publish ports itself.
-- The working fix was to publish SAB's UI via gluetun as `host-port:8080`.
+### Prowlarr — What it syncs
 
-### Prowlarr: what it syncs (and what it doesn't)
+Prowlarr syncs **indexers only** to Sonarr/Radarr. You must add download clients (qBit + SABnzbd) in Sonarr/Radarr manually.
 
-Prowlarr syncs indexers to Sonarr/Radarr, but not download clients.
+### Download client priority
 
-**So you must:**
-- Add NZBGeek + any torrent indexers in Prowlarr.
-- Add qBittorrent and SABnzbd as download clients in Sonarr/Radarr manually.
-
-### Download Client Priority (prefer Usenet over torrents)
-
-In Sonarr/Radarr → **Settings → Download Clients**, set priorities to prefer Usenet:
-- **SABnzbd:** Priority **1** (preferred)
+In Sonarr/Radarr → Settings → Download Clients:
+- **SABnzbd:** Priority **1** (preferred — faster, no seeding)
 - **qBittorrent:** Priority **50** (fallback)
 
-This ensures Usenet is tried first (faster, no seeding required), with torrents as a fallback when Usenet doesn't have the release.
+### Jellyseerr
 
-### Remote Path Mappings (Usenet import failures)
-
-**Symptom:** Radarr/Sonarr complains that SAB is downloading into a path that doesn't exist in the container.
-
-**Fix used:**
-
-SABnzbd folders:
-- Temporary: `/incomplete-downloads`
-- Completed: `/downloads`
-
-**Radarr/Sonarr → Settings → Download Clients → Remote Path Mappings:**
-- Host: `172.17.0.1`
-- Remote Path: `/downloads`
-- Local Path: `/downloads`
-
-### Jellyseerr → Radarr "Test OK but requests never arrive"
-
-**Symptom:** Jellyseerr connectivity test passes, but movie requests never show up in Radarr (Sonarr works).
-
-**Cause observed:** Radarr rejects Jellyseerr's attempt to auto-create request tags (400 error).
-
-**Fix used:**
-- **Jellyseerr → Settings → Radarr → Edit:** Disable "Tag Requests", or use a simple tag without invalid characters/spaces.
-- If needed: remove problematic tags in Radarr.
-
-### Jellyseerr can't resolve radarr / container DNS issues
-
-**Symptom:** `docker exec jellyseerr ping radarr` → bad address.
-
-In this setup, the practical workaround that immediately worked was to point Jellyseerr at the Docker host gateway IP (`172.17.0.1`) instead of relying on container DNS.
-
-**Example URLs in Jellyseerr:**
+Point at Docker host gateway for Sonarr/Radarr URLs:
 - Radarr: `http://172.17.0.1:7878`
 - Sonarr: `http://172.17.0.1:8989`
 
+Disable "Tag Requests" in Jellyseerr's Radarr settings if requests aren't arriving.
+
+### Vaultwarden
+
+Accessible via Cloudflare tunnel at your configured domain. Use `http://vaultwarden:7777` as the tunnel target (HTTP, not HTTPS — TLS terminates at Cloudflare edge).
+
+1. Set `VAULTWARDEN_SIGNUPS_ALLOWED=true` → create your account → set to `false` → redeploy
+2. Enable 2FA in vault settings
+3. Optionally disable admin panel: set `VAULTWARDEN_ADMIN_TOKEN=` (empty)
+
+### Immich
+
+Accessible via Cloudflare tunnel and on LAN at `http://NAS_IP:2283`.
+
+**External libraries:** Configure up to 5 via `IMMICH_EXTERNAL_1` through `IMMICH_EXTERNAL_5` in `.env`. Unset variables default to `/dev/null`. After adding, scan via **Administration → External Libraries** in Immich.
+
+**ML container:** Has explicit DNS (`8.8.8.8`, `1.1.1.1`) configured to download models from huggingface.co on first run.
+
+**Mobile app:** Use your tunnel URL as server, or `http://NAS_IP:2283` for faster LAN uploads.
+
+### Recyclarr
+
+Edit `recyclarr.yml` with your Sonarr/Radarr API keys and run:
+```bash
+make sync-recyclarr
+docker exec recyclarr recyclarr sync
+```
+
+Uses v8+ schema — `assign_scores_to` (not the old `quality_profiles`). Reaches Sonarr/Radarr via `http://gluetun:8989` / `http://gluetun:7878`.
+
 ---
 
-## Verification checklist (trust but verify)
+## Observability
 
-### VPN routing is real
+### Dozzle — Container logs
+`http://NAS_IP:9999` — real-time log viewer for all containers.
 
-Check qBittorrent's external IP:
+### Prometheus — Metrics
+`http://NAS_IP:9090` — scrapes cAdvisor (container metrics), node-exporter (host metrics), itself, and Oracle trading system (if connected).
+
+- Config: `prometheus.yml` in repo → synced to `CONFIG_ROOT/prometheus/` via `make sync-prometheus`
+- Retention: 30 days or 5 GB (whichever is hit first)
+- ⚠️ Prometheus runs as user `nobody` — config file must be world-readable (`chmod 644`)
+
+### Grafana — Dashboards
+`http://NAS_IP:3333` — auto-provisions dashboards from `grafana/dashboards/` and datasource from `grafana/provisioning/`.
+
+Included dashboards:
+- **mediaserver.json** — container resources, host metrics, disk usage
+- **oracle.json** — IB Gateway health, P&L, trades, API performance, guardrails
+
+⚠️ Dashboard and provisioning files must be world-readable. If dashboards show "Not Found":
+```bash
+chmod 755 grafana grafana/provisioning grafana/provisioning/dashboards grafana/provisioning/datasources grafana/dashboards
+chmod 644 grafana/dashboards/* grafana/provisioning/dashboards/* grafana/provisioning/datasources/*
+docker compose restart grafana
+```
+
+### Cross-compose monitoring (Oracle)
+
+To scrape metrics from containers in other compose projects (e.g., Oracle trading system), connect their network-parent container to the `monitoring` network:
 
 ```bash
+docker network connect mediaserver_monitoring <container_name>
+```
+
+Then add a scrape job to `prometheus.yml` targeting that container.
+
+---
+
+## Watchtower
+
+Auto-updates containers at 4 AM daily. **Gluetun is excluded** (`watchtower.enable=false`) because recreating gluetun orphans all `network_mode: service:gluetun` containers.
+
+Update gluetun manually:
+```bash
+make update-gluetun
+```
+
+---
+
+## Verification
+
+```bash
+# VPN is working
 docker exec qbittorrent curl ifconfig.me
-```
+# Should show a ProtonVPN IP, not your ISP
 
-**Expected:** a ProtonVPN exit IP, not your ISP IP.
-
-### Imports are working
-
-Completed downloads should be imported/moved from `/volume1/media/downloads` into:
-- `/volume1/media/tv/...` for Sonarr
-- `/volume1/media/movies/...` for Radarr
-
-### Jellyfin sees content
-
-If Jellyfin shows "No valid media source", it often meant the media hadn't completed importing yet.
-
-### Health checks
-
-All containers should show "healthy":
-
-```bash
+# All containers healthy
 docker compose ps
-```
 
----
-
-## Maintenance commands
-
-**Update containers (manual):**
-```bash
-docker compose pull && docker compose up -d
-```
-
-**Status:**
-```bash
-docker compose ps
-```
-
-**Logs:**
-```bash
+# Logs
 docker compose logs --tail=200
 ```
 
-**Watchtower will auto-update containers** at 4 AM daily (configurable via `WATCHTOWER_SCHEDULE`).
-
 ---
 
-## Recyclarr (TRaSH guides sync)
+## Gitea
 
-Recyclarr automatically syncs quality profiles from the TRaSH guides to your Sonarr/Radarr instances.
+LAN-only Git server at `http://NAS_IP:41234`. Set `GITEA_DISABLE_REGISTRATION=true` after creating your admin account.
 
-### First-time setup
-
-1. Generate config template:
-   ```bash
-   docker exec recyclarr recyclarr config create
-   ```
-
-2. Edit the config:
-   ```bash
-   nano /volume1/media/config/recyclarr/recyclarr.yml
-   ```
-
-3. Add your Sonarr/Radarr API keys and URLs. Recyclarr is on the `downloads` network so it can reach gluetun directly. Use the v8+ config schema (`assign_scores_to` instead of the old `quality_profiles`):
-   ```yaml
-   sonarr:
-     main:
-       base_url: http://gluetun:8989
-       api_key: your-sonarr-api-key
-       quality_definition:
-         type: series
-       custom_formats:
-         - trash_ids:
-             - example-cf-id
-           assign_scores_to:
-             - name: WEB-1080p
-   
-   radarr:
-     main:
-       base_url: http://gluetun:7878
-       api_key: your-radarr-api-key
-       quality_definition:
-         type: movie
-       custom_formats:
-         - trash_ids:
-             - example-cf-id
-           assign_scores_to:
-             - name: HD Bluray + WEB
-   ```
-
-4. Test sync:
-   ```bash
-   docker exec recyclarr recyclarr sync
-   ```
-
-5. Set up scheduled sync (add to crontab or use the container's built-in scheduler):
-   ```bash
-   docker exec recyclarr recyclarr sync --config /config/recyclarr.yml
-   ```
-
----
-
-## Portainer
-
-Portainer provides a web UI for managing your Docker containers.
-
-**Access:** `http://NAS_IP:9000`
-
-**First-time setup:**
-1. Open Portainer in browser
-2. Create admin account
-3. Select "Docker" as the environment
-4. Connect to local Docker socket
-
-**Features:**
-- View container logs
-- Start/stop/restart containers
-- View resource usage
-- Manage volumes and networks
-
----
-
-## Gitea (self-hosted Git)
-
-Gitea provides a lightweight self-hosted Git server — useful for private repos, backups, and agent memory storage.
-
-**Access:** `http://10.0.0.116:41234` (LAN only, not exposed to internet)
-
-### First-time setup
-
-1. Create config folder:
-   ```bash
-   mkdir -p /volume1/media/config/gitea
-   chown -R 1000:100 /volume1/media/config/gitea
-   ```
-
-2. Add to `.env`:
-   ```bash
-   NAS_IP=10.0.0.116
-   GITEA_PORT=41234
-   GITEA_DISABLE_REGISTRATION=false  # temporarily for setup
-   ```
-
-3. Deploy:
-   ```bash
-   docker compose up -d gitea
-   ```
-
-4. Access `http://10.0.0.116:41234` and create your admin account
-
-5. **After setup:** Set `GITEA_DISABLE_REGISTRATION=true` and redeploy
-
-### Pushing to Gitea
-
-From any machine on the LAN:
 ```bash
-git remote add nas http://10.0.0.116:41234/username/repo.git
+git remote add nas http://NAS_IP:41234/username/repo.git
 git push nas main
 ```
-
-### Neo's memory backup
-
-Neo backs up his SQLite memory database here for durability:
-```bash
-cd ~/.openclaw
-git init
-git add neo-memory.db
-git commit -m "Memory backup"
-git remote add nas http://10.0.0.116:41234/pranav/neo-memory.git
-git push -u nas main
-```
-
----
-
-## Vaultwarden (password manager)
-
-Vaultwarden is accessible via the Cloudflare tunnel at **vault.pranavprem.com**.
-
-**Cloudflare tunnel route:** Use `http://vaultwarden:7777` (not https). Vaultwarden serves HTTP; TLS is terminated at Cloudflare's edge. Traffic between cloudflared and vaultwarden stays on the local Docker network.
-
-**First-time setup:**
-1. Add `VAULTWARDEN_DOMAIN` and `VAULTWARDEN_ADMIN_TOKEN` to `.env`. Generate admin token: `docker run --rm -it vaultwarden/server /vaultwarden hash`
-2. Set `VAULTWARDEN_SIGNUPS_ALLOWED=true` in `.env` to create your account.
-3. Create account at https://vault.pranavprem.com, then set `VAULTWARDEN_SIGNUPS_ALLOWED=false` and redeploy.
-4. Enable 2FA (TOTP or WebAuthn) in your vault settings.
-5. **Recommended:** Set `VAULTWARDEN_ADMIN_TOKEN=` (empty) to disable admin panel after setup.
-
----
-
-## Immich (self-hosted photos)
-
-Immich is accessible via the Cloudflare tunnel at **photos.pranavprem.com** (configure in Cloudflare dashboard).
-
-### Architecture
-
-Immich runs in an isolated network (`immich`) with:
-- **PostgreSQL** (with pgvector for ML embeddings)
-- **Redis** (for job queue)
-- **Machine Learning** container (face recognition, smart search)
-- **Server** (API + web interface)
-
-Only `immich-server` is on the proxy network (for Cloudflare tunnel access). Database and Redis are isolated within the immich network.
-
-The ML container has explicit DNS configured (`8.8.8.8`, `1.1.1.1`) to ensure it can download ML models on first run.
-
-**LAN access:** Port 2283 is exposed directly — access at `http://NAS_IP:2283`.
-
-### First-time setup
-
-1. Folders should already exist from Step 1. Verify:
-   ```bash
-   ls -la /volume1/media/config/immich/
-   ls -la /volume1/media/photos/
-   ```
-
-2. Generate strong passwords and add to `.env`:
-   ```bash
-   # Generate passwords
-   openssl rand -base64 32  # for IMMICH_DB_PASSWORD
-   openssl rand -base64 32  # for IMMICH_REDIS_PASSWORD
-   ```
-
-3. Configure Cloudflare tunnel:
-   - Add route for `photos.pranavprem.com` → `http://immich-server:2283`
-
-4. Deploy (databases first to initialize):
-   ```bash
-   docker compose up -d immich-postgres immich-redis
-   sleep 15  # let DB initialize
-   docker compose up -d immich-machine-learning immich-server
-   ```
-
-5. Create your admin account at https://photos.pranavprem.com
-
-### External Libraries
-
-Immich supports mounting external photo libraries as read-only. Configure up to 5 via environment variables in `.env`:
-
-```bash
-IMMICH_EXTERNAL_1=/path/to/library1
-IMMICH_EXTERNAL_2=/path/to/library2
-# IMMICH_EXTERNAL_3 through IMMICH_EXTERNAL_5 available
-```
-
-These mount to `/mnt/external/library1` through `/mnt/external/library5` inside the container. Unset variables default to `/dev/null` (no mount). After adding, go to **Administration → External Libraries** in Immich to scan them.
-
-### Mobile app setup
-
-Download Immich app (iOS/Android), use `https://photos.pranavprem.com` as the server URL. For LAN access (faster uploads), use `http://NAS_IP:2283` as the local URL in the app settings.
-
-### Backup strategy
-
-Back up the PostgreSQL data regularly:
-```bash
-docker exec immich-postgres pg_dump -U postgres immich > immich_backup_$(date +%Y%m%d).sql
-```
-
----
-
-## Watchtower (auto-updates)
-
-Watchtower automatically updates your containers when new images are available.
-
-**Default schedule:** 4 AM daily
-
-**Configuration:**
-- `WATCHTOWER_SCHEDULE` — Cron expression for update checks
-- `WATCHTOWER_NOTIFICATIONS` — Enable notifications (shoutrrr format)
-- `WATCHTOWER_NOTIFICATION_URL` — Notification destination
-
-**Notification examples:**
-```bash
-# Discord webhook
-WATCHTOWER_NOTIFICATIONS=shoutrrr
-WATCHTOWER_NOTIFICATION_URL=discord://token@webhookid
-
-# Telegram
-WATCHTOWER_NOTIFICATION_URL=telegram://token@telegram?chats=chat-id
-```
-
-**Manual update check:**
-```bash
-docker exec watchtower /watchtower --run-once
-```
-
-**Exclude containers from auto-update:**
-Add label to the container:
-```yaml
-labels:
-  - "com.centurylinklabs.watchtower.enable=false"
-```
-
-**⚠️ Gluetun is excluded from Watchtower** — it has `watchtower.enable=false` because Watchtower can't handle `network_mode: service:` dependencies properly (updating gluetun would kill all containers that depend on it). Update gluetun manually:
-```bash
-docker compose pull gluetun && docker compose up -d
-```
-
----
-
-## Notes / next steps
-
-Remote access planning was discussed (reverse proxy / Cloudflare tunnel), but this repo focuses on the local LAN stack first.
-
-Plex can be added later for device compatibility; Jellyseerr can integrate with both Jellyfin and Plex.
