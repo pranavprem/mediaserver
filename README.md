@@ -22,6 +22,7 @@ Clone this repo onto a fresh NAS, follow the steps in order, and end up with the
 - **Watchtower** for automatic container updates (gluetun excluded — see below)
 - **Gitea** for self-hosted Git (LAN only)
 - **Observability stack**: Dozzle (logs), Prometheus + Grafana + cAdvisor + node-exporter (metrics)
+- **Homepage** dashboard — unified command center with live widgets and iframe embeds for all services
 
 ---
 
@@ -37,6 +38,8 @@ Clone this repo onto a fresh NAS, follow the steps in order, and end up with the
 | `immich` | Photo stack (DB/Redis isolated) | immich-server, immich-machine-learning, immich-postgres, immich-redis |
 | `management` | Container management | portainer, watchtower, gitea |
 | `monitoring` | Observability stack | prometheus, grafana, cadvisor, node-exporter, dozzle |
+
+Homepage (dashboard) spans multiple networks to reach all services for its widgets.
 
 ### Security Features
 
@@ -64,6 +67,7 @@ Services using `network_mode: "service:gluetun"` share gluetun's network namespa
 - `prometheus.yml` — Prometheus scrape config
 - `recyclarr.yml` — Recyclarr quality profiles (API key placeholders on public repo)
 - `grafana/` — provisioning configs and dashboard JSONs
+- `homepage/` — Homepage dashboard config (services, widgets, settings)
 - `Makefile` — operational targets (see below)
 - `README.md`
 
@@ -251,6 +255,28 @@ docker network connect mediaserver_monitoring <container_name>
 ```
 
 Then add a scrape job to `prometheus.yml` targeting that container.
+
+---
+
+## Homepage (Dashboard)
+
+Unified command center at `http://NAS_IP:3030` with live widgets for all services.
+
+**Config:** YAML files in `homepage/` — `services.yaml`, `settings.yaml`, `widgets.yaml`. Changes take effect on container restart.
+
+**API keys:** Set `HOMEPAGE_VAR_*` environment variables in `.env` (see `example.env` for the full list). The services config references these via `{{HOMEPAGE_VAR_*}}` syntax.
+
+**Features:**
+- Live service widgets: Sonarr/Radarr (wanted/queued), Jellyfin (now playing), Jellyseerr (requests), Portainer (containers), Home Assistant
+- Embedded Grafana dashboards (auto-refresh every 30s via iframe)
+- Quick links to all services (Dozzle, Oracle, Vaultwarden, Immich, Gitea, NAS UI)
+- Header: search bar, date/time, weather
+
+**Grafana iframe auth:** For the embedded Grafana dashboards to work without login, enable anonymous access in Grafana:
+```bash
+GF_AUTH_ANONYMOUS_ENABLED=true
+GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+```
 
 ---
 
