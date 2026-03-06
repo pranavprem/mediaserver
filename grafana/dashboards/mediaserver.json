@@ -185,8 +185,8 @@
       "type": "gauge",
       "targets": [
         {
-          "expr": "(1 - (node_filesystem_avail_bytes{mountpoint=~\"/host/volume1|/host\",fstype=\"ext4\"} / node_filesystem_size_bytes{mountpoint=~\"/host/volume1|/host\",fstype=\"ext4\"})) * 100",
-          "legendFormat": "{{mountpoint}}"
+          "expr": "(1 - (node_filesystem_avail_bytes{mountpoint=\"/volume1\",fstype=\"ext4\"} / node_filesystem_size_bytes{mountpoint=\"/volume1\",fstype=\"ext4\"})) * 100",
+          "legendFormat": "volume1"
         }
       ]
     },
