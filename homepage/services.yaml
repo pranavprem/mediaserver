@@ -7,7 +7,7 @@
         description: Media streaming
         widget:
           type: jellyfin
-          url: http://jellyfin:8096
+          url: http://{{HOMEPAGE_VAR_NAS_IP}}:8096
           key: "{{HOMEPAGE_VAR_JELLYFIN_KEY}}"
           enableBlocks: true
           enableNowPlaying: true
@@ -18,7 +18,7 @@
         description: Media requests
         widget:
           type: jellyseerr
-          url: http://jellyseerr:5055
+          url: http://{{HOMEPAGE_VAR_NAS_IP}}:5055
           key: "{{HOMEPAGE_VAR_JELLYSEERR_KEY}}"
 
     - Plex:
@@ -34,7 +34,7 @@
         description: TV shows
         widget:
           type: sonarr
-          url: http://gluetun:8989
+          url: http://{{HOMEPAGE_VAR_NAS_IP}}:8989
           key: "{{HOMEPAGE_VAR_SONARR_KEY}}"
           enableQueue: true
 
@@ -44,7 +44,7 @@
         description: Movies
         widget:
           type: radarr
-          url: http://gluetun:7878
+          url: http://{{HOMEPAGE_VAR_NAS_IP}}:7878
           key: "{{HOMEPAGE_VAR_RADARR_KEY}}"
           enableQueue: true
 
@@ -54,7 +54,7 @@
         description: Indexer manager
         widget:
           type: prowlarr
-          url: http://gluetun:9696
+          url: http://{{HOMEPAGE_VAR_NAS_IP}}:9696
           key: "{{HOMEPAGE_VAR_PROWLARR_KEY}}"
           enableIndexers: true
 
@@ -75,7 +75,7 @@
         description: Container management
         widget:
           type: portainer
-          url: http://portainer:9000
+          url: http://{{HOMEPAGE_VAR_NAS_IP}}:9000
           env: 1
           key: "{{HOMEPAGE_VAR_PORTAINER_KEY}}"
 
@@ -107,7 +107,7 @@
         description: Dashboards & metrics
         widget:
           type: grafana
-          url: http://grafana:3000
+          url: http://{{HOMEPAGE_VAR_NAS_IP}}:${GRAFANA_PORT:-3333}
           username: "{{HOMEPAGE_VAR_GRAFANA_USER}}"
           password: "{{HOMEPAGE_VAR_GRAFANA_PASS}}"
 
