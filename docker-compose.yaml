@@ -649,39 +649,25 @@ services:
 # │  Dashboard                                                                   │
 # ╰──────────────────────────────────────────────────────────────────────────────╯
 
-  homepage:
-    image: ghcr.io/gethomepage/homepage:latest
-    container_name: homepage
+  organizr:
+    image: organizr/organizr:latest
+    container_name: organizr
     ports:
-      - ${HOMEPAGE_PORT:-3030}:3000
+      - ${ORGANIZR_PORT:-3030}:80
     environment:
-      - HOMEPAGE_ALLOWED_HOSTS=*
       - PUID=${PUID}
       - PGID=${PGID}
-      - HOMEPAGE_VAR_NAS_IP=${HOMEPAGE_VAR_NAS_IP}
-      - HOMEPAGE_VAR_SONARR_KEY=${HOMEPAGE_VAR_SONARR_KEY}
-      - HOMEPAGE_VAR_RADARR_KEY=${HOMEPAGE_VAR_RADARR_KEY}
-      - HOMEPAGE_VAR_PROWLARR_KEY=${HOMEPAGE_VAR_PROWLARR_KEY}
-      - HOMEPAGE_VAR_JELLYFIN_KEY=${HOMEPAGE_VAR_JELLYFIN_KEY}
-      - HOMEPAGE_VAR_JELLYSEERR_KEY=${HOMEPAGE_VAR_JELLYSEERR_KEY}
-      - HOMEPAGE_VAR_HASS_KEY=${HOMEPAGE_VAR_HASS_KEY}
-      - HOMEPAGE_VAR_PORTAINER_KEY=${HOMEPAGE_VAR_PORTAINER_KEY}
-      - HOMEPAGE_VAR_GRAFANA_USER=${HOMEPAGE_VAR_GRAFANA_USER}
-      - HOMEPAGE_VAR_GRAFANA_PASS=${HOMEPAGE_VAR_GRAFANA_PASS}
+      - TZ=${TZ}
+      - fpm=true
     volumes:
-      - ./homepage:/app/config
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${CONFIG_ROOT}/organizr:/config
     networks:
       - management
-      - monitoring
-      - media
-      - downloads
-      - proxy
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000 || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:80 || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
