@@ -22,7 +22,6 @@ Clone this repo onto a fresh NAS, follow the steps in order, and end up with the
 - **Watchtower** for automatic container updates (gluetun excluded — see below)
 - **Gitea** for self-hosted Git (LAN only)
 - **Observability stack**: Dozzle (logs), Prometheus + Grafana + cAdvisor + node-exporter (metrics)
-- **Organizr** — tabbed dashboard with live iframe views of all services in one place
 
 ---
 
@@ -256,32 +255,6 @@ docker network connect mediaserver_monitoring <container_name>
 Then add a scrape job to `prometheus.yml` targeting that container.
 
 ---
-
-## Organizr (Dashboard)
-
-Tabbed dashboard at `http://NAS_IP:3030` with live iframe views of all services.
-
-**First-time setup:**
-1. Open `http://NAS_IP:3030` and create admin account
-2. Add tabs: Settings → Tab Editor → Add Tab
-3. Each tab is a full iframe — add your services (HA, Grafana, Sonarr, Radarr, Dozzle, etc.)
-4. Tabs load the actual service UI, not just links
-
-**Config:** Stored in `${CONFIG_ROOT}/organizr/`. All setup is done through the web UI.
-
-**Useful tabs to add:**
-- Home Assistant: `http://NAS_IP:8123`
-- Grafana (Mediaserver): `http://NAS_IP:GRAFANA_PORT/d/mediaserver/mediaserver?kiosk`
-- Grafana (Oracle): `http://NAS_IP:GRAFANA_PORT/d/oracle-trading/oracle-trading-system?kiosk`
-- Sonarr: `http://NAS_IP:8989`
-- Radarr: `http://NAS_IP:7878`
-- Jellyseerr: `http://NAS_IP:5055`
-- Jellyfin: `http://NAS_IP:8096`
-- Dozzle: `http://NAS_IP:DOZZLE_PORT`
-- Portainer: `http://NAS_IP:9000`
-- Claude Usage: `https://claude.ai/settings/usage`
-- Perplexity: `https://www.perplexity.ai`
-
 ---
 
 ## Watchtower
