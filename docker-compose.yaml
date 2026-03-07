@@ -645,33 +645,6 @@ services:
 # │  monitoring - Prometheus, Grafana, cAdvisor, Dozzle                          │
 # ╰──────────────────────────────────────────────────────────────────────────────╯
 
-# ╭──────────────────────────────────────────────────────────────────────────────╮
-# │  Dashboard                                                                   │
-# ╰──────────────────────────────────────────────────────────────────────────────╯
-
-  organizr:
-    image: organizr/organizr:latest
-    container_name: organizr
-    ports:
-      - ${ORGANIZR_PORT:-3030}:80
-    environment:
-      - PUID=${PUID}
-      - PGID=${PGID}
-      - TZ=${TZ}
-      - fpm=true
-    volumes:
-      - ${CONFIG_ROOT}/organizr:/config
-    networks:
-      - management
-    security_opt:
-      - no-new-privileges:true
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:80 || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
 networks:
   downloads:
     driver: bridge
