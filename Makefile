@@ -33,7 +33,7 @@ sync-recyclarr:
 # Reload Grafana dashboards (provisioned from repo, restart picks up changes)
 sync-grafana:
 	@echo "📊 Reloading Grafana dashboards..."
-	docker compose restart grafana
+	docker restart grafana
 	@echo "✅ Grafana dashboards reloaded."
 
 # ─── Gluetun Update ─────────────────────────────────────────────────────────
