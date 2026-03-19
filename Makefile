@@ -1,7 +1,7 @@
 include .env
 export
 
-.PHONY: update-gluetun sync-configs sync-prometheus sync-recyclarr help
+.PHONY: update-gluetun sync-configs sync-prometheus sync-recyclarr sync-grafana help
 
 # Services that use network_mode: service:gluetun
 GLUETUN_DEPS = qbittorrent sabnzbd prowlarr radarr sonarr
@@ -9,7 +9,7 @@ GLUETUN_DEPS = qbittorrent sabnzbd prowlarr radarr sonarr
 # ─── Config Sync ─────────────────────────────────────────────────────────────
 
 # Sync all repo configs to CONFIG_ROOT and restart affected services
-sync-configs: sync-prometheus sync-recyclarr
+sync-configs: sync-prometheus sync-recyclarr sync-grafana
 	@echo "✅ All configs synced."
 
 # Sync Prometheus config and restart
@@ -29,6 +29,12 @@ sync-recyclarr:
 	chmod 644 $(CONFIG_ROOT)/recyclarr/recyclarr.yml
 	docker compose restart recyclarr
 	@echo "✅ Recyclarr config updated and restarted."
+
+# Reload Grafana dashboards (provisioned from repo, restart picks up changes)
+sync-grafana:
+	@echo "📊 Reloading Grafana dashboards..."
+	docker compose restart grafana
+	@echo "✅ Grafana dashboards reloaded."
 
 # ─── Gluetun Update ─────────────────────────────────────────────────────────
 
@@ -55,6 +61,7 @@ help:
 	@echo "  sync-configs    - Sync all repo configs to CONFIG_ROOT and restart services"
 	@echo "  sync-prometheus - Sync prometheus.yml and restart Prometheus"
 	@echo "  sync-recyclarr  - Sync recyclarr.yml and restart Recyclarr"
+	@echo "  sync-grafana    - Reload Grafana dashboards from repo"
 	@echo "  update-gluetun  - Pull latest gluetun image and restart with dependents"
 	@echo "  help            - Show this help"
 
