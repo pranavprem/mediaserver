@@ -26,4 +26,4 @@ scrape_configs:
     scrape_interval: 15s
     metrics_path: '/api/v1/metrics'
     static_configs:
-      - targets: ['ibgateway:8000']
+      - targets: ['oracle:8000']
