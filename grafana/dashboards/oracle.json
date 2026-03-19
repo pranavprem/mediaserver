@@ -10,7 +10,7 @@
       "collapsed": false,
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
       "id": 100,
-      "title": "🔌 System Health",
+      "title": "🔌 Gateway Health",
       "type": "row"
     },
     {
@@ -28,9 +28,9 @@
       "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
       "id": 1,
       "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
-      "title": "IB Gateway",
+      "title": "Gateway Status",
       "type": "stat",
-      "targets": [{ "expr": "oracle_ib_connected", "refId": "A" }]
+      "targets": [{ "expr": "oracle_gateway_connected", "refId": "A" }]
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
@@ -49,7 +49,7 @@
       "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
       "title": "Health Check",
       "type": "stat",
-      "targets": [{ "expr": "oracle_ib_health_check_ok", "refId": "A" }]
+      "targets": [{ "expr": "oracle_gateway_health_check_ok", "refId": "A" }]
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
@@ -82,14 +82,13 @@
       "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
       "title": "Reconnect Attempts",
       "type": "stat",
-      "targets": [{ "expr": "oracle_ib_reconnect_attempts_total", "refId": "A" }]
+      "targets": [{ "expr": "oracle_gateway_reconnect_attempts_total", "refId": "A" }]
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
-          "unit": "bytes",
-          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 536870912 }, { "color": "red", "value": 1073741824 }] },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 3 }, { "color": "red", "value": 10 }] },
           "color": { "mode": "thresholds" }
         },
         "overrides": []
@@ -97,16 +96,15 @@
       "gridPos": { "h": 4, "w": 4, "x": 16, "y": 1 },
       "id": 5,
       "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
-      "title": "Memory (RSS)",
+      "title": "Health Check Failures",
       "type": "stat",
-      "targets": [{ "expr": "process_resident_memory_bytes{job=\"oracle\"}", "refId": "A" }]
+      "targets": [{ "expr": "oracle_gateway_health_check_failures_total", "refId": "A" }]
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
-          "unit": "short",
-          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 3 }] },
           "color": { "mode": "thresholds" }
         },
         "overrides": []
@@ -114,9 +112,9 @@
       "gridPos": { "h": 4, "w": 4, "x": 20, "y": 1 },
       "id": 6,
       "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
-      "title": "Open FDs",
+      "title": "Data Stream Disconnects",
       "type": "stat",
-      "targets": [{ "expr": "process_open_fds{job=\"oracle\"}", "refId": "A" }]
+      "targets": [{ "expr": "oracle_data_stream_disconnects_total", "refId": "A" }]
     },
     {
       "collapsed": false,
@@ -182,7 +180,7 @@
       "fieldConfig": {
         "defaults": {
           "unit": "currencyUSD",
-          "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 20, "pointSize": 5, "showPoints": "auto", "spanNulls": false },
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 20, "showPoints": "never", "spanNulls": false },
           "color": { "mode": "palette-classic" },
           "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 0 }] }
         },
@@ -190,7 +188,7 @@
       },
       "gridPos": { "h": 5, "w": 6, "x": 18, "y": 6 },
       "id": 13,
-      "options": { "legend": { "displayMode": "hidden" }, "tooltip": { "mode": "single" } },
+      "options": { "legend": { "displayMode": "hidden" }, "tooltip": { "mode": "multi", "sort": "desc" } },
       "title": "P&L Over Time",
       "type": "timeseries",
       "targets": [{ "expr": "oracle_pnl_daily", "legendFormat": "Daily P&L", "refId": "A" }]
@@ -199,6 +197,155 @@
       "collapsed": false,
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 11 },
       "id": 102,
+      "title": "📈 Strategy",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 30, "stacking": { "mode": "normal" }, "showPoints": "never" },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 12 },
+      "id": 20,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "title": "Signals by Symbol",
+      "type": "timeseries",
+      "targets": [{ "expr": "rate(oracle_strategy_signals_total[5m])", "legendFormat": "{{symbol}} {{action}}", "refId": "A" }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 20, "showPoints": "never" },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 12 },
+      "id": 21,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "title": "Setups Detected",
+      "type": "timeseries",
+      "targets": [{ "expr": "rate(oracle_strategy_setups_total[5m])", "legendFormat": "{{symbol}} {{direction}}", "refId": "A" }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 20, "showPoints": "never" },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 12 },
+      "id": 22,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "title": "Orders by Action",
+      "type": "timeseries",
+      "targets": [{ "expr": "rate(oracle_gateway_orders_total[5m])", "legendFormat": "{{action}} ({{status}})", "refId": "A" }]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 19 },
+      "id": 103,
+      "title": "📡 Data Streams",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 20, "showPoints": "never" },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 20 },
+      "id": 30,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "title": "Bars Received",
+      "type": "timeseries",
+      "targets": [{ "expr": "rate(oracle_data_stream_bars_total[5m])", "legendFormat": "{{symbol}}", "refId": "A" }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 20, "showPoints": "never" },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 20 },
+      "id": 31,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "title": "Trade Ticks",
+      "type": "timeseries",
+      "targets": [{ "expr": "rate(oracle_data_stream_trades_total[5m])", "legendFormat": "{{symbol}}", "refId": "A" }]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 27 },
+      "id": 104,
+      "title": "⚠️ Alerts & Errors",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 20, "showPoints": "never" },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 28 },
+      "id": 40,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "title": "Alerts by Type",
+      "type": "timeseries",
+      "targets": [{ "expr": "rate(oracle_alerts_total[5m])", "legendFormat": "{{type}} [{{level}}]", "refId": "A" }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 20, "showPoints": "never" },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 28 },
+      "id": 41,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "title": "Errors by Component",
+      "type": "timeseries",
+      "targets": [{ "expr": "rate(oracle_errors_total[5m])", "legendFormat": "{{component}}", "refId": "A" }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 10 }, { "color": "red", "value": 50 }] },
+          "color": { "mode": "thresholds" }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 28 },
+      "id": 42,
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "title": "Alert Count (24h)",
+      "type": "stat",
+      "targets": [{ "expr": "increase(oracle_alerts_total[24h])", "refId": "A" }]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 35 },
+      "id": 105,
       "title": "📊 API Performance",
       "type": "row"
     },
@@ -212,8 +359,8 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
-      "id": 20,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 36 },
+      "id": 50,
       "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["sum"] }, "tooltip": { "mode": "multi", "sort": "desc" } },
       "title": "Request Rate by Endpoint",
       "type": "timeseries",
@@ -229,8 +376,8 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
-      "id": 21,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 36 },
+      "id": 51,
       "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] }, "tooltip": { "mode": "multi", "sort": "desc" } },
       "title": "Request Latency (p95)",
       "type": "timeseries",
@@ -245,8 +392,8 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
-      "id": 22,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 44 },
+      "id": 52,
       "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["sum"] }, "tooltip": { "mode": "multi", "sort": "desc" } },
       "title": "Total Requests by Endpoint",
       "type": "timeseries",
@@ -262,10 +409,10 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 20 },
-      "id": 23,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 44 },
+      "id": 53,
       "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] }, "tooltip": { "mode": "multi", "sort": "desc" } },
-      "title": "Request Latency (p50 vs p99)",
+      "title": "Latency p50 vs p99",
       "type": "timeseries",
       "targets": [
         { "expr": "histogram_quantile(0.50, rate(oracle_api_request_duration_seconds_bucket{endpoint!~\"/api/v1/ping|/api/v1/metrics\"}[5m]))", "legendFormat": "p50 {{endpoint}}", "refId": "A" },
@@ -274,8 +421,8 @@
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 28 },
-      "id": 103,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 52 },
+      "id": 106,
       "title": "🖥️ Process Resources",
       "type": "row"
     },
@@ -289,9 +436,9 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 29 },
-      "id": 30,
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 53 },
+      "id": 60,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi", "sort": "desc" } },
       "title": "Memory Usage",
       "type": "timeseries",
       "targets": [
@@ -303,15 +450,14 @@
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
-          "unit": "short",
           "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 20, "showPoints": "never" },
           "color": { "mode": "palette-classic" }
         },
         "overrides": []
       },
-      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 29 },
-      "id": 31,
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 53 },
+      "id": 61,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi", "sort": "desc" } },
       "title": "CPU Time",
       "type": "timeseries",
       "targets": [{ "expr": "rate(process_cpu_seconds_total{job=\"oracle\"}[5m])", "legendFormat": "CPU cores", "refId": "A" }]
@@ -320,15 +466,14 @@
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
-          "unit": "short",
           "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 20, "showPoints": "never" },
           "color": { "mode": "palette-classic" }
         },
         "overrides": []
       },
-      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 29 },
-      "id": 32,
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 53 },
+      "id": 62,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi", "sort": "desc" } },
       "title": "File Descriptors",
       "type": "timeseries",
       "targets": [
