@@ -18,7 +18,7 @@ sync-prometheus:
 	@mkdir -p $(CONFIG_ROOT)/prometheus
 	cp prometheus.yml $(CONFIG_ROOT)/prometheus/prometheus.yml
 	chmod 644 $(CONFIG_ROOT)/prometheus/prometheus.yml
-	docker compose restart prometheus
+	docker restart prometheus
 	@echo "✅ Prometheus config updated and restarted."
 
 # Sync Recyclarr config and restart
@@ -27,7 +27,7 @@ sync-recyclarr:
 	@mkdir -p $(CONFIG_ROOT)/recyclarr
 	cp recyclarr.yml $(CONFIG_ROOT)/recyclarr/recyclarr.yml
 	chmod 644 $(CONFIG_ROOT)/recyclarr/recyclarr.yml
-	docker compose restart recyclarr
+	docker restart recyclarr
 	@echo "✅ Recyclarr config updated and restarted."
 
 # Reload Grafana dashboards (provisioned from repo, restart picks up changes)
