@@ -154,7 +154,7 @@
       "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
       "title": "Total Trades",
       "type": "stat",
-      "targets": [{ "expr": "oracle_trades_total", "refId": "A" }]
+      "targets": [{ "expr": "sum(oracle_trades_total)", "refId": "A" }]
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
