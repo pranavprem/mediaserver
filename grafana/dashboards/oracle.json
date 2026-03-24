@@ -664,11 +664,11 @@
               },
               {
                 "color": "yellow",
-                "value": 5000
+                "value": 20000
               },
               {
-                "color": "#00ff41",
-                "value": 10000
+                "color": "green",
+                "value": 50000
               }
             ]
           },
@@ -872,16 +872,16 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "#00ff41",
+                "color": "green",
                 "value": null
               },
               {
                 "color": "yellow",
-                "value": 3
+                "value": 1
               },
               {
                 "color": "red",
-                "value": 5
+                "value": 3
               }
             ]
           },
@@ -964,8 +964,8 @@
       "type": "timeseries",
       "targets": [
         {
-          "expr": "rate(oracle_phase2_breakout_total[5m])",
-          "legendFormat": "{{symbol}} {{result}}",
+          "expr": "increase(oracle_phase2_breakout_total[1h])",
+          "legendFormat": "{{result}}",
           "refId": "A"
         }
       ]
@@ -979,7 +979,7 @@
         "y": 29
       },
       "id": 107,
-      "title": "\ud83c\udfaf Phase 1 \u2014 Signal Detection",
+      "title": "\ud83c\udfaf Phase 1 \u2014 3-Min Signal Detection",
       "type": "row"
     },
     {
@@ -1169,11 +1169,11 @@
           "sort": "desc"
         }
       },
-      "title": "1-Min Candles/sec",
+      "title": "1-Min Candles/min",
       "type": "timeseries",
       "targets": [
         {
-          "expr": "rate(oracle_phase2_candles_total[5m])",
+          "expr": "rate(oracle_phase2_candles_total[5m]) * 60",
           "legendFormat": "{{symbol}}",
           "refId": "A"
         }
@@ -1199,7 +1199,53 @@
             "mode": "palette-classic"
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "entry_taken"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#00ff41",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "no_breakout"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#808080",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "invalidated_or_expired"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "orange",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 7,
