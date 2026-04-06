@@ -482,7 +482,7 @@ services:
       - USER_GID=${PGID}
       - TZ=${TZ}
       - GITEA__database__DB_TYPE=sqlite3
-      - GITEA__server__ROOT_URL=http://${NAS_IP:-10.0.0.116}:${GITEA_PORT:-41234}
+      - GITEA__server__ROOT_URL=https://git.pranavprem.com
       - GITEA__server__DISABLE_SSH=true
       - GITEA__service__DISABLE_REGISTRATION=${GITEA_DISABLE_REGISTRATION:-true}
     volumes:
@@ -491,6 +491,7 @@ services:
       - ${GITEA_PORT:-41234}:3000
     networks:
       - management
+      - proxy
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
