@@ -485,6 +485,7 @@ services:
       - GITEA__server__ROOT_URL=https://git.pranavprem.com
       - GITEA__server__DISABLE_SSH=true
       - GITEA__service__DISABLE_REGISTRATION=${GITEA_DISABLE_REGISTRATION:-true}
+      - GITEA__webhook__ALLOWED_HOST_LIST=loopback,10.0.0.0/8
     volumes:
       - ${CONFIG_ROOT}/gitea:/data
     ports:
