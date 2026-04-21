@@ -108,7 +108,9 @@ The Makefile reads `CONFIG_ROOT` from `.env` — no hardcoded paths.
 
 **General stack control:** prefer `make up`, `make down`, `make restart`, `make logs`, and `make ps` over raw `docker compose` commands.
 
-**After editing any config file in the repo:** `git pull && make sync-configs`
+**NAS deployment branch:** this stack is deployed from the Gitea `private` branch on the NAS.
+
+**After updating the repo on the NAS:** `git checkout private && git pull origin private && make sync-configs`
 
 **Gluetun updates:** `make update-gluetun` (never use Watchtower for this)
 
@@ -127,6 +129,14 @@ This guide assumes:
 - Config root: `/volume1/media/config`
 - Media root: `/volume1/media`
 - Documents root: `/volume1/media/documents`
+
+If you're updating the existing NAS deployment, make sure you're on the deployed branch first:
+
+```bash
+cd /volume1/docker/mediaserver
+git checkout private
+git pull origin private
+```
 
 ### Step 1 — Create folders
 
@@ -303,7 +313,7 @@ Included dashboards:
 ```bash
 chmod 755 grafana grafana/provisioning grafana/provisioning/dashboards grafana/provisioning/datasources grafana/dashboards
 chmod 644 grafana/dashboards/* grafana/provisioning/dashboards/* grafana/provisioning/datasources/*
-docker compose restart grafana
+make sync-grafana
 ```
 
 ### Cross-compose monitoring (Oracle)
@@ -338,10 +348,10 @@ docker exec qbittorrent curl ifconfig.me
 # Should show a ProtonVPN IP, not your ISP
 
 # All containers healthy
-docker compose ps
+make ps
 
 # Logs
-docker compose logs --tail=200
+make logs
 ```
 
 ---
@@ -350,7 +360,9 @@ docker compose logs --tail=200
 
 LAN-only Git server at `http://NAS_IP:41234`. Set `GITEA_DISABLE_REGISTRATION=true` after creating your admin account.
 
+For this stack, the NAS deployment tracks the `private` branch from Gitea.
+
 ```bash
 git remote add nas http://NAS_IP:41234/username/repo.git
-git push nas main
+git push -u nas private
 ```
