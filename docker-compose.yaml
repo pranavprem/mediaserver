@@ -451,6 +451,127 @@ services:
 # │  ░█▄█░█▀█░█▀█░█▀█░█▀▀░█▀▀░█▄█░█▀▀░█▀█░▀█▀                                    │
 # │  ░█░█░█▀█░█░█░█▀█░█░█░█▀▀░█░█░█▀▀░█░█░░█░                                    │
 # │  ░▀░▀░▀░▀░▀░▀░▀░▀░▀▀▀░▀▀▀░▀░▀░▀▀▀░▀░▀░░▀░                                    │
+# │  Document Management (Cloudflare tunnel: paperless.pranavprem.com)           │
+# ╰──────────────────────────────────────────────────────────────────────────────╯
+
+  paperless-webserver:
+    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    container_name: paperless-webserver
+    environment:
+      - USERMAP_UID=${PUID}
+      - USERMAP_GID=${PGID}
+      - PAPERLESS_TIME_ZONE=${TZ}
+      - PAPERLESS_URL=${PAPERLESS_URL}
+      - PAPERLESS_SECRET_KEY=${PAPERLESS_SECRET_KEY}
+      - PAPERLESS_DBHOST=paperless-postgres
+      - PAPERLESS_DBPORT=5432
+      - PAPERLESS_DBUSER=${PAPERLESS_DB_USERNAME:-paperless}
+      - PAPERLESS_DBPASS=${PAPERLESS_DB_PASSWORD}
+      - PAPERLESS_DBNAME=${PAPERLESS_DB_DATABASE:-paperless}
+      - PAPERLESS_REDIS=redis://:${PAPERLESS_REDIS_PASSWORD}@paperless-redis:6379
+      - PAPERLESS_OCR_LANGUAGE=${PAPERLESS_OCR_LANGUAGE:-eng}
+      - PAPERLESS_TIKA_ENABLED=1
+      - PAPERLESS_TIKA_ENDPOINT=http://paperless-tika:9998
+      - PAPERLESS_TIKA_GOTENBERG_ENDPOINT=http://paperless-gotenberg:3000
+    volumes:
+      - ${CONFIG_ROOT}/paperless/data:/usr/src/paperless/data
+      - ${DOCUMENTS_ROOT}/media:/usr/src/paperless/media
+      - ${DOCUMENTS_ROOT}/export:/usr/src/paperless/export
+      - ${DOCUMENTS_ROOT}/consume:/usr/src/paperless/consume
+    depends_on:
+      paperless-postgres:
+        condition: service_healthy
+      paperless-redis:
+        condition: service_healthy
+      paperless-gotenberg:
+        condition: service_started
+      paperless-tika:
+        condition: service_started
+    networks:
+      - paperless
+      - proxy
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000', timeout=2)\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  paperless-postgres:
+    image: docker.io/library/postgres:16-alpine
+    container_name: paperless-postgres
+    environment:
+      - POSTGRES_USER=${PAPERLESS_DB_USERNAME:-paperless}
+      - POSTGRES_PASSWORD=${PAPERLESS_DB_PASSWORD}
+      - POSTGRES_DB=${PAPERLESS_DB_DATABASE:-paperless}
+      - TZ=${TZ}
+    volumes:
+      - ${CONFIG_ROOT}/paperless/postgres:/var/lib/postgresql/data
+    networks:
+      - paperless
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d ${PAPERLESS_DB_DATABASE:-paperless} -U ${PAPERLESS_DB_USERNAME:-paperless}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  paperless-redis:
+    image: docker.io/redis:7-alpine
+    container_name: paperless-redis
+    command: redis-server --appendonly yes --requirepass ${PAPERLESS_REDIS_PASSWORD}
+    environment:
+      - TZ=${TZ}
+      - REDISCLI_AUTH=${PAPERLESS_REDIS_PASSWORD}
+    volumes:
+      - ${CONFIG_ROOT}/paperless/redis:/data
+    networks:
+      - paperless
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  paperless-gotenberg:
+    image: docker.io/gotenberg/gotenberg:7.10
+    container_name: paperless-gotenberg
+    # Paperless-recommended flags: JS disabled, filesystem access limited to /tmp
+    command:
+      - "gotenberg"
+      - "--chromium-disable-javascript=true"
+      - "--chromium-allow-list=file:///tmp/.*"
+    environment:
+      - TZ=${TZ}
+    networks:
+      - paperless
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  paperless-tika:
+    image: docker.io/apache/tika:latest
+    container_name: paperless-tika
+    environment:
+      - TZ=${TZ}
+    networks:
+      - paperless
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+# ╭──────────────────────────────────────────────────────────────────────────────╮
+# │  ░█▄█░█▀█░█▀█░█▀█░█▀▀░█▀▀░█▄█░█▀▀░█▀█░▀█▀                                    │
+# │  ░█░█░█▀█░█░█░█▀█░█░█░█▀▀░█░█░█▀▀░█░█░░█░                                    │
+# │  ░▀░▀░▀░▀░▀░▀░▀░▀░▀▀▀░▀▀▀░▀░▀░▀▀▀░▀░▀░░▀░                                    │
 # │  Container Management & Auto-Updates                                         │
 # ╰──────────────────────────────────────────────────────────────────────────────╯
 
@@ -644,6 +765,7 @@ services:
 # │  media      - Media servers and management                                   │
 # │  proxy      - Services exposed via Cloudflare tunnel                         │
 # │  immich     - Photo stack (isolated DB/Redis)                                │
+# │  paperless  - Document stack (isolated DB/Redis/Gotenberg/Tika)              │
 # │  management - Portainer, Watchtower (docker.sock access)                     │
 # │  monitoring - Prometheus, Grafana, cAdvisor, Dozzle                          │
 # ╰──────────────────────────────────────────────────────────────────────────────╯
@@ -656,6 +778,8 @@ networks:
   proxy:
     driver: bridge
   immich:
+    driver: bridge
+  paperless:
     driver: bridge
   management:
     driver: bridge

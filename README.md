@@ -18,6 +18,7 @@ Clone this repo onto a fresh NAS, follow the steps in order, and end up with the
 - Streams via **Jellyfin** and **Plex**
 - Self-hosted password manager (**Vaultwarden**) via Cloudflare tunnel
 - Self-hosted photos (**Immich**) with ML-powered face recognition and smart search
+- Self-hosted documents (**Paperless-ngx**) with OCR (Tesseract), Tika + Gotenberg for Office/PDF parsing
 - **Portainer** for container management UI
 - **Watchtower** for automatic container updates (gluetun excluded — see below)
 - **Gitea** for self-hosted Git (LAN only)
@@ -33,8 +34,9 @@ Clone this repo onto a fresh NAS, follow the steps in order, and end up with the
 |---------|---------|------------|
 | `downloads` | VPN-tunneled traffic | gluetun, qbittorrent, sabnzbd, prowlarr, radarr, sonarr, recyclarr |
 | `media` | Media streaming & management | jellyfin, jellyseerr, plex, recyclarr |
-| `proxy` | Cloudflare tunnel access | cloudflared, jellyfin, jellyseerr, plex, vaultwarden, immich-server |
+| `proxy` | Cloudflare tunnel access | cloudflared, jellyfin, jellyseerr, plex, vaultwarden, immich-server, paperless-webserver |
 | `immich` | Photo stack (DB/Redis isolated) | immich-server, immich-machine-learning, immich-postgres, immich-redis |
+| `paperless` | Document stack (DB/Redis/Gotenberg/Tika isolated) | paperless-webserver, paperless-postgres, paperless-redis, paperless-gotenberg, paperless-tika |
 | `management` | Container management | portainer, watchtower, gitea |
 | `monitoring` | Observability stack | prometheus, grafana, cadvisor, node-exporter, dozzle |
 
@@ -72,7 +74,7 @@ Services using `network_mode: "service:gluetun"` share gluetun's network namespa
 **On the NAS (NOT committed):**
 - `.env` — real secrets (copy from `example.env`)
 - `${CONFIG_ROOT}/*` — service databases, tokens, settings
-- Media directories (downloads, movies, tv, photos)
+- Media/document directories (downloads, movies, tv, photos, documents)
 
 ---
 
@@ -82,15 +84,37 @@ The Makefile reads `CONFIG_ROOT` from `.env` — no hardcoded paths.
 
 | Target | What it does |
 |--------|-------------|
+| `make up` | Starts the full mediaserver stack |
+| `make down` | Brings the full mediaserver stack down |
+| `make restart` | Restarts the full mediaserver stack |
+| `make logs` | Tails logs for the full mediaserver stack |
+| `make ps` | Shows status for the full mediaserver stack |
 | `make sync-configs` | Copies prometheus.yml + recyclarr.yml to CONFIG_ROOT, fixes permissions, restarts both services |
 | `make sync-prometheus` | Syncs just prometheus.yml and restarts Prometheus |
 | `make sync-recyclarr` | Syncs just recyclarr.yml and restarts Recyclarr |
+| `make setup-paperless` | Validates Paperless env vars, creates NAS directories, and starts the Paperless stack |
+| `make paperless-up` | Starts the Paperless services |
+| `make paperless-down` | Stops the Paperless services |
+| `make paperless-restart` | Restarts the Paperless services |
+| `make paperless-status` | Shows Paperless container status |
+| `make paperless-health` | Shows runtime + health status for the Paperless containers |
+| `make paperless-logs` | Tails logs for the Paperless stack |
+| `make paperless-reset-perms` | Resets ownership for Paperless web/storage directories |
+| `make paperless-backup` | Creates a timestamped Paperless backup under `DOCUMENTS_ROOT/backups/` |
+| `make paperless-superuser` | Runs Paperless `createsuperuser` |
+| `make paperless-shell` | Opens a shell in the Paperless web container |
 | `make update-gluetun` | Pulls latest gluetun image, stops all 5 dependents, recreates gluetun, waits for healthy, restarts dependents |
 | `make help` | Shows available targets |
+
+**General stack control:** prefer `make up`, `make down`, `make restart`, `make logs`, and `make ps` over raw `docker compose` commands.
 
 **After editing any config file in the repo:** `git pull && make sync-configs`
 
 **Gluetun updates:** `make update-gluetun` (never use Watchtower for this)
+
+**Paperless bootstrap:** after filling the Paperless env vars in `.env`, run `make setup-paperless`
+
+**Paperless admin:** use `make paperless-superuser`, `make paperless-status`, `make paperless-health`, `make paperless-logs`, and `make paperless-backup` instead of raw `docker compose` commands
 
 ---
 
@@ -102,14 +126,17 @@ This guide assumes:
 - Compose project folder: `/volume1/docker/mediaserver`
 - Config root: `/volume1/media/config`
 - Media root: `/volume1/media`
+- Documents root: `/volume1/media/documents`
 
 ### Step 1 — Create folders
 
 ```bash
 mkdir -p /volume1/docker/mediaserver
 mkdir -p /volume1/media/{downloads,downloads/incomplete,movies,tv,photos}
+mkdir -p /volume1/media/documents/{media,consume,export,backups}
 mkdir -p /volume1/media/config/{gluetun,qbittorrent,sabnzbd,prowlarr,sonarr,radarr,jellyfin,jellyseerr,plex,vaultwarden,portainer,recyclarr,prometheus,gitea}
 mkdir -p /volume1/media/config/immich/{postgres,redis,model-cache}
+mkdir -p /volume1/media/config/paperless/{data,postgres,redis}
 ```
 
 ### Step 2 — Permissions
@@ -132,7 +159,8 @@ nano .env
 
 Generate secure passwords:
 ```bash
-openssl rand -base64 32                                    # Immich DB/Redis passwords
+openssl rand -base64 32                                    # Immich + Paperless DB/Redis passwords
+openssl rand -base64 50                                    # PAPERLESS_SECRET_KEY
 docker run --rm -it vaultwarden/server /vaultwarden hash   # Vaultwarden admin token
 ```
 
@@ -140,8 +168,8 @@ docker run --rm -it vaultwarden/server /vaultwarden hash   # Vaultwarden admin t
 
 ```bash
 cd /volume1/docker/mediaserver
-docker compose up -d
-docker compose ps
+make up
+make ps
 ```
 
 ### Step 5 — Sync configs
@@ -205,6 +233,40 @@ Accessible via Cloudflare tunnel and on LAN at `http://NAS_IP:2283`.
 **ML container:** Has explicit DNS (`8.8.8.8`, `1.1.1.1`) configured to download models from huggingface.co on first run.
 
 **Mobile app:** Use your tunnel URL as server, or `http://NAS_IP:2283` for faster LAN uploads.
+
+### Paperless-ngx
+
+Accessible via Cloudflare tunnel at your configured domain. Use `http://paperless-webserver:8000` as the tunnel target (HTTP, not HTTPS — TLS terminates at Cloudflare edge).
+
+Recommended first-run flow:
+1. Fill in the Paperless env vars in `.env`
+2. Run:
+   ```bash
+   make setup-paperless
+   ```
+3. Add a public hostname in Cloudflare Tunnel pointing to `http://paperless-webserver:8000`
+4. Create your admin account:
+   ```bash
+   make paperless-superuser
+   ```
+5. In Paperless, create a separate login for Abhinaya instead of sharing credentials
+6. Check health or logs if needed:
+   ```bash
+   make paperless-status
+   make paperless-health
+   make paperless-logs
+   ```
+7. If web uploads ever hit ownership weirdness, run:
+   ```bash
+   make paperless-reset-perms
+   ```
+8. Create manual backups any time with:
+   ```bash
+   make paperless-backup
+   ```
+9. Test mobile upload from your phone over the tunnel URL before adding any extra Cloudflare Access rules
+
+**Mobile capture while away from home:** the simplest first version is using the Paperless web UI over the tunnel URL and uploading scans/photos there. Once that works, you can optionally add mail ingestion or a phone-friendly app flow.
 
 ### Recyclarr
 
