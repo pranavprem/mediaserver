@@ -118,6 +118,8 @@ The Makefile reads `CONFIG_ROOT` from `.env` — no hardcoded paths.
 
 **Paperless admin:** use `make paperless-superuser`, `make paperless-status`, `make paperless-health`, `make paperless-logs`, and `make paperless-backup` instead of raw `docker compose` commands
 
+**Paperless OCR default:** this stack sets `PAPERLESS_OCR_MODE=redo` because mobile-scanner PDFs and app uploads can contain broken or partial text layers that `skip` mode will ignore.
+
 ---
 
 ## Quick start
@@ -275,6 +277,8 @@ Recommended first-run flow:
    make paperless-backup
    ```
 9. Test mobile upload from your phone over the tunnel URL before adding any extra Cloudflare Access rules
+
+If existing uploads still are not searchable after changing OCR settings, reprocess them from the Paperless UI after the stack restart. The current document actions use the active OCR settings, so changing the mode first matters.
 
 **Mobile capture while away from home:** the simplest first version is using the Paperless web UI over the tunnel URL and uploading scans/photos there. Once that works, you can optionally add mail ingestion or a phone-friendly app flow.
 
