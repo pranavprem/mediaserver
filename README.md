@@ -89,9 +89,11 @@ The Makefile reads `CONFIG_ROOT` from `.env` — no hardcoded paths.
 | `make restart` | Restarts the full mediaserver stack |
 | `make logs` | Tails logs for the full mediaserver stack |
 | `make ps` | Shows status for the full mediaserver stack |
-| `make sync-configs` | Copies prometheus.yml + recyclarr.yml to CONFIG_ROOT, fixes permissions, restarts both services |
+| `make sync-configs` | Copies prometheus.yml + renders recyclarr.yml into CONFIG_ROOT, then refreshes affected services |
 | `make sync-prometheus` | Syncs just prometheus.yml and restarts Prometheus |
-| `make sync-recyclarr` | Syncs just recyclarr.yml and restarts Recyclarr |
+| `make sync-recyclarr` | Renders recyclarr.yml with live Sonarr/Radarr API keys and ensures Recyclarr is running |
+| `make recyclarr-preview` | Previews a TRaSH sync without changing Sonarr/Radarr |
+| `make setup-recyclarr` | One-shot Recyclarr setup: render config and apply TRaSH profiles |
 | `make setup-paperless` | Validates Paperless env vars, creates NAS directories, and starts the Paperless stack |
 | `make paperless-up` | Starts the Paperless services |
 | `make paperless-down` | Stops the Paperless services |
@@ -284,13 +286,28 @@ If existing uploads still are not searchable after changing OCR settings, reproc
 
 ### Recyclarr
 
-Edit `recyclarr.yml` with your Sonarr/Radarr API keys and run:
+One-shot setup / repair:
 ```bash
-make sync-recyclarr
-docker exec recyclarr recyclarr sync
+make setup-recyclarr
 ```
 
-Uses v8+ schema — `assign_scores_to` (not the old `quality_profiles`). Reaches Sonarr/Radarr via `http://gluetun:8989` / `http://gluetun:7878`.
+That target:
+- reads the live API keys from `CONFIG_ROOT/sonarr/config.xml` and `CONFIG_ROOT/radarr/config.xml`
+- renders the repo template to `CONFIG_ROOT/recyclarr/recyclarr.yml`
+- ensures the `recyclarr` container is running
+- runs `recyclarr sync` to apply the official TRaSH guide profiles
+
+Preview without changing Sonarr/Radarr:
+```bash
+make recyclarr-preview
+```
+
+If you only want to refresh the rendered config and leave the actual sync for later:
+```bash
+make sync-recyclarr
+```
+
+The repo now uses official TRaSH quality profile IDs (`trash_id`) plus `custom_format_groups`, instead of hand-maintained quality ladders. Sonarr/Radarr are reached via `http://gluetun:8989` / `http://gluetun:7878`.
 
 ---
 

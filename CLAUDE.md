@@ -38,14 +38,16 @@ CLAUDE.md             # This file
 
 ## Key Operational Commands
 ```bash
-make sync-configs      # Sync prometheus.yml + recyclarr.yml to CONFIG_ROOT, restart services
+make sync-configs      # Sync prometheus.yml + render recyclarr.yml into CONFIG_ROOT, refresh services
 make sync-prometheus   # Sync just prometheus config
-make sync-recyclarr    # Sync just recyclarr config
+make sync-recyclarr    # Render recyclarr.yml with live Arr API keys, ensure Recyclarr is running
+make recyclarr-preview # Preview a Recyclarr sync without changing Sonarr/Radarr
+make setup-recyclarr   # One-shot Recyclarr setup and TRaSH profile sync
 make sync-grafana      # Restart Grafana to pick up dashboard changes
 make update-gluetun    # Safe gluetun update: pull → stop dependents → recreate → wait healthy → restart dependents
 ```
 
-The Makefile reads `CONFIG_ROOT` from `.env` (via `include .env`). All config syncs copy from repo to `$CONFIG_ROOT/<service>/` and restart.
+The Makefile reads `CONFIG_ROOT` from `.env` (via `include .env`). Prometheus is copied from repo to `$CONFIG_ROOT/prometheus/`. Recyclarr is rendered from the repo template plus live API keys read from `$CONFIG_ROOT/{sonarr,radarr}/config.xml`.
 
 ## Network Architecture (6 isolated networks)
 | Network | Purpose | Key containers |
@@ -69,7 +71,8 @@ The Makefile reads `CONFIG_ROOT` from `.env` (via `include .env`). All config sy
 - Vaultwarden: signups disabled, tunnel-only access (no LAN port exposed), HTTP internally (TLS at Cloudflare edge)
 - Prometheus: runs as user `nobody` — config files must be `chmod 644`
 - Grafana: dashboards + provisioning files must be world-readable (`chmod 755` dirs, `chmod 644` files)
-- Recyclarr uses v8+ schema (`assign_scores_to`, not old `quality_profiles`), reaches arr services via `http://gluetun:<port>`
+- Recyclarr uses official TRaSH guide templates (`trash_id` quality profiles + `custom_format_groups`), and `make setup-recyclarr` auto-renders live API keys before syncing
+- Recyclarr reaches Arr services via `http://gluetun:<port>` because Sonarr/Radarr share gluetun's network namespace
 
 ## Cross-Compose Monitoring
 Other Docker Compose projects (e.g., Oracle trading system) can be scraped by connecting their container to the `mediaserver_monitoring` network:
@@ -79,7 +82,7 @@ docker network connect mediaserver_monitoring <container_name>
 Then add a scrape job to `prometheus.yml`.
 
 ## Pending Work
-- [ ] Set up Recyclarr quality profiles properly (TRaSH guides)
+- [ ] Verify live Recyclarr sync on the NAS after the next `make setup-recyclarr` run
 - [ ] Set up Grafana dashboards properly (provisioning is in place, dashboards need tuning)
 - [ ] Verify current state of arr services on gluetun network (was reverted at one point)
 

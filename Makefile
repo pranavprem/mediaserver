@@ -1,7 +1,7 @@
 include .env
 export
 
-.PHONY: up down restart logs ps update-gluetun sync-configs sync-prometheus sync-recyclarr sync-grafana paperless-validate setup-paperless paperless-up paperless-down paperless-restart paperless-logs paperless-status paperless-health paperless-reset-perms paperless-backup paperless-superuser paperless-shell help
+.PHONY: up down restart logs ps update-gluetun sync-configs sync-prometheus sync-recyclarr recyclarr-preview setup-recyclarr sync-grafana paperless-validate setup-paperless paperless-up paperless-down paperless-restart paperless-logs paperless-status paperless-health paperless-reset-perms paperless-backup paperless-superuser paperless-shell help
 
 # Services that use network_mode: service:gluetun
 GLUETUN_DEPS = qbittorrent sabnzbd prowlarr radarr sonarr
@@ -44,14 +44,29 @@ sync-prometheus:
 	docker restart prometheus
 	@echo "✅ Prometheus config updated and restarted."
 
-# Sync Recyclarr config and restart
+# Render Recyclarr config with live API keys and ensure the container is running
 sync-recyclarr:
-	@echo "♻️  Syncing recyclarr.yml → $(CONFIG_ROOT)/recyclarr/"
+	@echo "♻️  Rendering recyclarr.yml → $(CONFIG_ROOT)/recyclarr/recyclarr.yml"
+	@test -n "$(CONFIG_ROOT)" && [ "$(CONFIG_ROOT)" != "/path/to/config" ] || (echo "❌ Set CONFIG_ROOT in .env first." && exit 1)
+	@test -f "$(CONFIG_ROOT)/sonarr/config.xml" || (echo "❌ Missing $(CONFIG_ROOT)/sonarr/config.xml. Start Sonarr first." && exit 1)
+	@test -f "$(CONFIG_ROOT)/radarr/config.xml" || (echo "❌ Missing $(CONFIG_ROOT)/radarr/config.xml. Start Radarr first." && exit 1)
 	@mkdir -p $(CONFIG_ROOT)/recyclarr
-	cp recyclarr.yml $(CONFIG_ROOT)/recyclarr/recyclarr.yml
-	chmod 644 $(CONFIG_ROOT)/recyclarr/recyclarr.yml
-	docker restart recyclarr
-	@echo "✅ Recyclarr config updated and restarted."
+	@python3 scripts/render_recyclarr_config.py "$(CONFIG_ROOT)"
+	@chmod 600 $(CONFIG_ROOT)/recyclarr/recyclarr.yml
+	@docker compose up -d recyclarr
+	@echo "✅ Recyclarr config rendered and container ensured running."
+
+# Preview a Recyclarr sync without changing Sonarr/Radarr
+recyclarr-preview: sync-recyclarr
+	@echo "🔍 Previewing Recyclarr sync..."
+	@docker exec recyclarr recyclarr sync --preview
+	@echo "✅ Preview complete."
+
+# One-shot Recyclarr setup: render config and apply TRaSH profiles
+setup-recyclarr: sync-recyclarr
+	@echo "♻️  Running Recyclarr sync..."
+	@docker exec recyclarr recyclarr sync
+	@echo "✅ Recyclarr profiles synced to Sonarr + Radarr."
 
 # Reload Grafana dashboards (provisioned from repo, restart picks up changes)
 sync-grafana:
@@ -174,7 +189,9 @@ help:
 	@echo "  ps                   - Show full mediaserver container status"
 	@echo "  sync-configs         - Sync all repo configs to CONFIG_ROOT and restart services"
 	@echo "  sync-prometheus      - Sync prometheus.yml and restart Prometheus"
-	@echo "  sync-recyclarr       - Sync recyclarr.yml and restart Recyclarr"
+	@echo "  sync-recyclarr       - Render recyclarr.yml with live Arr API keys and ensure Recyclarr is running"
+	@echo "  recyclarr-preview    - Preview the Recyclarr sync without changing Sonarr/Radarr"
+	@echo "  setup-recyclarr      - One-shot Recyclarr setup and TRaSH profile sync"
 	@echo "  sync-grafana         - Reload Grafana dashboards from repo"
 	@echo "  setup-paperless      - Create Paperless dirs on NAS and start the document stack"
 	@echo "  paperless-up         - Start all Paperless services"
