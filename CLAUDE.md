@@ -41,8 +41,8 @@ CLAUDE.md             # This file
 make sync-configs      # Sync prometheus.yml + render recyclarr.yml into CONFIG_ROOT, refresh services
 make sync-prometheus   # Sync just prometheus config
 make sync-recyclarr    # Render recyclarr.yml with live Arr API keys, ensure Recyclarr is running
-make recyclarr-preview # Preview a Recyclarr sync without changing Sonarr/Radarr
-make setup-recyclarr   # One-shot Recyclarr setup and TRaSH profile sync
+make recyclarr-preview # Preview Recyclarr adoption + sync without changing Sonarr/Radarr
+make setup-recyclarr   # One-shot Recyclarr setup, adopt existing Arr state, and sync TRaSH profiles
 make sync-grafana      # Restart Grafana to pick up dashboard changes
 make update-gluetun    # Safe gluetun update: pull → stop dependents → recreate → wait healthy → restart dependents
 ```
@@ -71,7 +71,7 @@ The Makefile reads `CONFIG_ROOT` from `.env` (via `include .env`). Prometheus is
 - Vaultwarden: signups disabled, tunnel-only access (no LAN port exposed), HTTP internally (TLS at Cloudflare edge)
 - Prometheus: runs as user `nobody` — config files must be `chmod 644`
 - Grafana: dashboards + provisioning files must be world-readable (`chmod 755` dirs, `chmod 644` files)
-- Recyclarr uses official TRaSH guide templates (`trash_id` quality profiles + `custom_format_groups`), and `make setup-recyclarr` auto-renders live API keys before syncing
+- Recyclarr uses official TRaSH guide templates (`trash_id` quality profiles + `custom_format_groups`), and `make setup-recyclarr` auto-renders live API keys, adopts existing Arr state with `recyclarr state repair --adopt`, then syncs
 - Recyclarr reaches Arr services via `http://gluetun:<port>` because Sonarr/Radarr share gluetun's network namespace
 
 ## Cross-Compose Monitoring

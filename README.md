@@ -295,9 +295,10 @@ That target:
 - reads the live API keys from `CONFIG_ROOT/sonarr/config.xml` and `CONFIG_ROOT/radarr/config.xml`
 - renders the repo template to `CONFIG_ROOT/recyclarr/recyclarr.yml`
 - ensures the `recyclarr` container is running
+- runs `recyclarr state repair --adopt` so existing Sonarr/Radarr profiles can be adopted instead of colliding by name
 - runs `recyclarr sync` to apply the official TRaSH guide profiles
 
-Preview without changing Sonarr/Radarr:
+Preview adoption + sync without changing Sonarr/Radarr:
 ```bash
 make recyclarr-preview
 ```

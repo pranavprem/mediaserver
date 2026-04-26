@@ -56,14 +56,18 @@ sync-recyclarr:
 	@docker compose up -d recyclarr
 	@echo "✅ Recyclarr config rendered and container ensured running."
 
-# Preview a Recyclarr sync without changing Sonarr/Radarr
+# Preview adoption + sync without changing Sonarr/Radarr
 recyclarr-preview: sync-recyclarr
+	@echo "🔍 Previewing Recyclarr state repair/adoption..."
+	@docker exec recyclarr recyclarr state repair --adopt --preview
 	@echo "🔍 Previewing Recyclarr sync..."
 	@docker exec recyclarr recyclarr sync --preview
 	@echo "✅ Preview complete."
 
-# One-shot Recyclarr setup: render config and apply TRaSH profiles
+# One-shot Recyclarr setup: render config, adopt existing Arr state, then sync
 setup-recyclarr: sync-recyclarr
+	@echo "🛠️  Repairing Recyclarr state and adopting existing Arr resources..."
+	@docker exec recyclarr recyclarr state repair --adopt
 	@echo "♻️  Running Recyclarr sync..."
 	@docker exec recyclarr recyclarr sync
 	@echo "✅ Recyclarr profiles synced to Sonarr + Radarr."
@@ -190,8 +194,8 @@ help:
 	@echo "  sync-configs         - Sync all repo configs to CONFIG_ROOT and restart services"
 	@echo "  sync-prometheus      - Sync prometheus.yml and restart Prometheus"
 	@echo "  sync-recyclarr       - Render recyclarr.yml with live Arr API keys and ensure Recyclarr is running"
-	@echo "  recyclarr-preview    - Preview the Recyclarr sync without changing Sonarr/Radarr"
-	@echo "  setup-recyclarr      - One-shot Recyclarr setup and TRaSH profile sync"
+	@echo "  recyclarr-preview    - Preview Recyclarr adoption + sync without changing Sonarr/Radarr"
+	@echo "  setup-recyclarr      - One-shot Recyclarr setup, adopt existing Arr state, and sync TRaSH profiles"
 	@echo "  sync-grafana         - Reload Grafana dashboards from repo"
 	@echo "  setup-paperless      - Create Paperless dirs on NAS and start the document stack"
 	@echo "  paperless-up         - Start all Paperless services"
