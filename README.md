@@ -13,6 +13,7 @@ Clone this repo onto a fresh NAS, follow the steps in order, and end up with the
 - Routes **download traffic** through ProtonVPN using `gluetun` + WireGuard
 - Uses both **torrents** (qBittorrent) and **Usenet** (SABnzbd) for downloads
 - Automates TV + Movies with Sonarr/Radarr, indexers managed by Prowlarr
+- Adds **Bazarr** for subtitle automation, with a default English + Spanish profile bootstrap
 - **Recyclarr** auto-syncs quality profiles from TRaSH guides
 - Request UI with **Jellyseerr** driving Sonarr/Radarr
 - Streams via **Jellyfin** and **Plex**
@@ -32,7 +33,7 @@ Clone this repo onto a fresh NAS, follow the steps in order, and end up with the
 
 | Network | Purpose | Containers |
 |---------|---------|------------|
-| `downloads` | VPN-tunneled traffic | gluetun, qbittorrent, sabnzbd, prowlarr, radarr, sonarr, recyclarr |
+| `downloads` | VPN-tunneled traffic | gluetun, qbittorrent, sabnzbd, prowlarr, radarr, sonarr, bazarr, recyclarr |
 | `media` | Media streaming & management | jellyfin, jellyseerr, plex, recyclarr |
 | `proxy` | Cloudflare tunnel access | cloudflared, jellyfin, jellyseerr, plex, vaultwarden, immich-server, paperless-webserver |
 | `immich` | Photo stack (DB/Redis isolated) | immich-server, immich-machine-learning, immich-postgres, immich-redis |
@@ -94,6 +95,7 @@ The Makefile reads `CONFIG_ROOT` from `.env` — no hardcoded paths.
 | `make sync-recyclarr` | Renders recyclarr.yml with live Sonarr/Radarr API keys and ensures Recyclarr is running |
 | `make recyclarr-preview` | Previews a TRaSH sync without changing Sonarr/Radarr |
 | `make setup-recyclarr` | One-shot Recyclarr setup: render config and apply TRaSH profiles |
+| `make setup-bazarr` | Starts Bazarr, wires Sonarr/Radarr using live API keys, and seeds default English + Spanish subtitles |
 | `make setup-paperless` | Validates Paperless env vars, creates NAS directories, and starts the Paperless stack |
 | `make paperless-up` | Starts the Paperless services |
 | `make paperless-down` | Stops the Paperless services |
@@ -105,7 +107,7 @@ The Makefile reads `CONFIG_ROOT` from `.env` — no hardcoded paths.
 | `make paperless-backup` | Creates a timestamped Paperless backup under `DOCUMENTS_ROOT/backups/` |
 | `make paperless-superuser` | Runs Paperless `createsuperuser` |
 | `make paperless-shell` | Opens a shell in the Paperless web container |
-| `make update-gluetun` | Pulls latest gluetun image, stops all 5 dependents, recreates gluetun, waits for healthy, restarts dependents |
+| `make update-gluetun` | Pulls latest gluetun image, stops all gluetun dependents, recreates gluetun, waits for healthy, restarts dependents |
 | `make help` | Shows available targets |
 
 **General stack control:** prefer `make up`, `make down`, `make restart`, `make logs`, and `make ps` over raw `docker compose` commands.
@@ -113,6 +115,8 @@ The Makefile reads `CONFIG_ROOT` from `.env` — no hardcoded paths.
 **NAS deployment branch:** this stack is deployed from the Gitea `private` branch on the NAS.
 
 **After updating the repo on the NAS:** `git checkout private && git pull origin private && make sync-configs`
+
+**If you're adding Bazarr to an existing deployment:** run `make setup-bazarr` once after pulling.
 
 **Gluetun updates:** `make update-gluetun` (never use Watchtower for this)
 
@@ -148,7 +152,7 @@ git pull origin private
 mkdir -p /volume1/docker/mediaserver
 mkdir -p /volume1/media/{downloads,downloads/incomplete,movies,tv,photos}
 mkdir -p /volume1/media/documents/{media,consume,export,backups}
-mkdir -p /volume1/media/config/{gluetun,qbittorrent,sabnzbd,prowlarr,sonarr,radarr,jellyfin,jellyseerr,plex,vaultwarden,portainer,recyclarr,prometheus,gitea}
+mkdir -p /volume1/media/config/{gluetun,qbittorrent,sabnzbd,prowlarr,sonarr,radarr,bazarr,jellyfin,jellyseerr,plex,vaultwarden,portainer,recyclarr,prometheus,gitea}
 mkdir -p /volume1/media/config/immich/{postgres,redis,model-cache}
 mkdir -p /volume1/media/config/paperless/{data,postgres,redis}
 ```
@@ -229,6 +233,26 @@ Point at Docker host gateway for Sonarr/Radarr URLs:
 - Sonarr: `http://172.17.0.1:8989`
 
 Disable "Tag Requests" in Jellyseerr's Radarr settings if requests aren't arriving.
+
+### Bazarr
+
+Bazarr is exposed on LAN at `http://NAS_IP:6767` by default (or whatever you set for `BAZARR_PORT` in `.env`).
+
+Bootstrap it with:
+
+```bash
+make setup-bazarr
+```
+
+That target will:
+- start `gluetun`, `sonarr`, `radarr`, and `bazarr`
+- wire Bazarr to Sonarr/Radarr using the live API keys from their config files
+- create or update a default `English + Spanish` language profile
+- make that profile the default for new series and movies
+
+After that, add at least one subtitle provider in the Bazarr UI (for example OpenSubtitles.com) if you want it to actually fetch subtitles.
+
+Important: Bazarr manages **subtitles only**. It does **not** download or swap audio tracks/dubs. It can use detected audio-language metadata to influence subtitle rules, but it does not change the audio stream itself.
 
 ### Vaultwarden
 

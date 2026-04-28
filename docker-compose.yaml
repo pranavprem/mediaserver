@@ -46,6 +46,7 @@ services:
       - ${PROWLARR_PORT}:${PROWLARR_PORT}
       - ${RADARR_PORT}:${RADARR_PORT}
       - ${SONARR_PORT}:${SONARR_PORT}
+      - ${BAZARR_PORT}:6767
     volumes:
       - ${CONFIG_ROOT}/gluetun:/gluetun
     networks:
@@ -207,6 +208,30 @@ services:
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:${SONARR_PORT:-8989}/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  bazarr:
+    image: lscr.io/linuxserver/bazarr:latest
+    container_name: bazarr
+    network_mode: service:gluetun
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${CONFIG_ROOT}/bazarr:/config
+      - ${MOVIES_ROOT}:/movies
+      - ${TV_ROOT}:/tv
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6767/"]
       interval: 30s
       timeout: 10s
       retries: 3

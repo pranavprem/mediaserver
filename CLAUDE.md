@@ -43,6 +43,7 @@ make sync-prometheus   # Sync just prometheus config
 make sync-recyclarr    # Render recyclarr.yml with live Arr API keys, ensure Recyclarr is running
 make recyclarr-preview # Preview Recyclarr adoption + sync without changing Sonarr/Radarr
 make setup-recyclarr   # One-shot Recyclarr setup, adopt existing Arr state, and sync TRaSH profiles
+make setup-bazarr      # Start Bazarr, wire Sonarr/Radarr, and seed default English+Spanish subtitles
 make sync-grafana      # Restart Grafana to pick up dashboard changes
 make update-gluetun    # Safe gluetun update: pull → stop dependents → recreate → wait healthy → restart dependents
 ```
@@ -52,7 +53,7 @@ The Makefile reads `CONFIG_ROOT` from `.env` (via `include .env`). Prometheus is
 ## Network Architecture (6 isolated networks)
 | Network | Purpose | Key containers |
 |---------|---------|----------------|
-| `downloads` | VPN-tunneled traffic | gluetun, qbittorrent, sabnzbd, prowlarr, radarr, sonarr, recyclarr |
+| `downloads` | VPN-tunneled traffic | gluetun, qbittorrent, sabnzbd, prowlarr, radarr, sonarr, bazarr, recyclarr |
 | `media` | Media streaming | jellyfin, jellyseerr, plex, recyclarr |
 | `proxy` | Cloudflare tunnel | cloudflared, jellyfin, jellyseerr, plex, vaultwarden, immich-server |
 | `immich` | Photo stack (isolated DB/Redis) | immich-server, immich-ml, immich-postgres, immich-redis |
@@ -60,7 +61,7 @@ The Makefile reads `CONFIG_ROOT` from `.env` (via `include .env`). Prometheus is
 | `monitoring` | Observability | prometheus, grafana, cadvisor, node-exporter, dozzle |
 
 ## Key Configuration Notes
-- **Gluetun dependents** (qbittorrent, sabnzbd, prowlarr, radarr, sonarr) use `network_mode: service:gluetun` — they share gluetun's network namespace and CANNOT publish their own ports
+- **Gluetun dependents** (qbittorrent, sabnzbd, prowlarr, radarr, sonarr, bazarr) use `network_mode: service:gluetun` — they share gluetun's network namespace and CANNOT publish their own ports
 - Prowlarr indexer priorities: NZBgeek=1, DrunkenSlug=5, torrents=25
 - Watchtower: gluetun excluded (`watchtower.enable=false`), rolling restarts DISABLED (was causing restart spam)
 - Portainer: healthcheck disabled (no tools in container), port 9443 removed (conflicts with NAS)
@@ -73,6 +74,7 @@ The Makefile reads `CONFIG_ROOT` from `.env` (via `include .env`). Prometheus is
 - Grafana: dashboards + provisioning files must be world-readable (`chmod 755` dirs, `chmod 644` files)
 - Recyclarr uses official TRaSH guide templates (`trash_id` quality profiles + `custom_format_groups`), and `make setup-recyclarr` auto-renders live API keys, adopts existing Arr state with `recyclarr state repair --adopt`, then syncs
 - Recyclarr reaches Arr services via `http://gluetun:<port>` because Sonarr/Radarr share gluetun's network namespace
+- Bazarr is bootstrapped by `scripts/setup_bazarr.py` plus `make setup-bazarr`, which wires live Sonarr/Radarr API keys and seeds a default English + Spanish subtitle profile
 
 ## Cross-Compose Monitoring
 Other Docker Compose projects (e.g., Oracle trading system) can be scraped by connecting their container to the `mediaserver_monitoring` network:

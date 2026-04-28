@@ -356,7 +356,7 @@
         "y": 14
       },
       "id": 102,
-      "title": "\ud83d\udce1 Arr Stack (Prowlarr + Sonarr + Radarr + Recyclarr)",
+      "title": "\ud83d\udce1 Arr Stack (Prowlarr + Sonarr + Radarr + Bazarr + Recyclarr)",
       "type": "row"
     },
     {
@@ -382,7 +382,7 @@
       "type": "timeseries",
       "targets": [
         {
-          "expr": "rate(container_cpu_usage_seconds_total{name=~\"prowlarr|sonarr|radarr|recyclarr\"}[5m]) * 100",
+          "expr": "rate(container_cpu_usage_seconds_total{name=~\"prowlarr|sonarr|radarr|bazarr|recyclarr\"}[5m]) * 100",
           "legendFormat": "{{name}}"
         }
       ]
@@ -408,7 +408,7 @@
       "type": "timeseries",
       "targets": [
         {
-          "expr": "container_memory_usage_bytes{name=~\"prowlarr|sonarr|radarr|recyclarr\"}",
+          "expr": "container_memory_usage_bytes{name=~\"prowlarr|sonarr|radarr|bazarr|recyclarr\"}",
           "legendFormat": "{{name}}"
         }
       ]
@@ -434,11 +434,11 @@
       "type": "timeseries",
       "targets": [
         {
-          "expr": "rate(container_network_receive_bytes_total{name=~\"prowlarr|sonarr|radarr|recyclarr\"}[5m])",
+          "expr": "rate(container_network_receive_bytes_total{name=~\"prowlarr|sonarr|radarr|bazarr|recyclarr\"}[5m])",
           "legendFormat": "{{name}} \u2193"
         },
         {
-          "expr": "rate(container_network_transmit_bytes_total{name=~\"prowlarr|sonarr|radarr|recyclarr\"}[5m])",
+          "expr": "rate(container_network_transmit_bytes_total{name=~\"prowlarr|sonarr|radarr|bazarr|recyclarr\"}[5m])",
           "legendFormat": "{{name}} \u2191"
         }
       ]

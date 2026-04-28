@@ -1,10 +1,11 @@
 include .env
 export
 
-.PHONY: up down restart logs ps update-gluetun sync-configs sync-prometheus sync-recyclarr recyclarr-preview setup-recyclarr sync-grafana paperless-validate setup-paperless paperless-up paperless-down paperless-restart paperless-logs paperless-status paperless-health paperless-reset-perms paperless-backup paperless-superuser paperless-shell help
+.PHONY: up down restart logs ps update-gluetun sync-configs sync-prometheus sync-recyclarr recyclarr-preview setup-recyclarr setup-bazarr sync-grafana paperless-validate setup-paperless paperless-up paperless-down paperless-restart paperless-logs paperless-status paperless-health paperless-reset-perms paperless-backup paperless-superuser paperless-shell help
 
 # Services that use network_mode: service:gluetun
-GLUETUN_DEPS = qbittorrent sabnzbd prowlarr radarr sonarr
+GLUETUN_DEPS = qbittorrent sabnzbd prowlarr radarr sonarr bazarr
+BAZARR_DEFAULT_URL ?= http://127.0.0.1:$(BAZARR_PORT)
 
 # ─── Stack Wrappers ──────────────────────────────────────────────────────────
 
@@ -71,6 +72,15 @@ setup-recyclarr: sync-recyclarr
 	@echo "♻️  Running Recyclarr sync..."
 	@docker exec recyclarr recyclarr sync
 	@echo "✅ Recyclarr profiles synced to Sonarr + Radarr."
+
+# One-shot Bazarr setup: start services, wire Sonarr/Radarr, and seed default subtitle profile
+setup-bazarr:
+	@echo "🈂️  Starting Bazarr + Arr services needed for bootstrap..."
+	@test -n "$(CONFIG_ROOT)" && [ "$(CONFIG_ROOT)" != "/path/to/config" ] || (echo "❌ Set CONFIG_ROOT in .env first." && exit 1)
+	docker compose up -d gluetun sonarr radarr bazarr
+	@BAZARR_URL="$(BAZARR_DEFAULT_URL)" python3 scripts/setup_bazarr.py "$(CONFIG_ROOT)"
+	@echo "✅ Bazarr configured with default English + Spanish subtitles."
+	@echo "➡️  Next: add subtitle providers in Bazarr at $(BAZARR_DEFAULT_URL) for actual subtitle downloads."
 
 # Reload Grafana dashboards (provisioned from repo, restart picks up changes)
 sync-grafana:
@@ -196,6 +206,7 @@ help:
 	@echo "  sync-recyclarr       - Render recyclarr.yml with live Arr API keys and ensure Recyclarr is running"
 	@echo "  recyclarr-preview    - Preview Recyclarr adoption + sync without changing Sonarr/Radarr"
 	@echo "  setup-recyclarr      - One-shot Recyclarr setup, adopt existing Arr state, and sync TRaSH profiles"
+	@echo "  setup-bazarr         - Start Bazarr, wire Sonarr/Radarr, and seed default English+Spanish subtitles"
 	@echo "  sync-grafana         - Reload Grafana dashboards from repo"
 	@echo "  setup-paperless      - Create Paperless dirs on NAS and start the document stack"
 	@echo "  paperless-up         - Start all Paperless services"
