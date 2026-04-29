@@ -32,7 +32,7 @@ def read_arr_api_key(path: Path) -> str:
     return node.text.strip()
 
 
-def read_bazarr_api_key(path: Path) -> str:
+def parse_bazarr_api_key(path: Path) -> str | None:
     lines = path.read_text().splitlines()
     in_auth = False
     auth_indent = 0
@@ -56,11 +56,21 @@ def read_bazarr_api_key(path: Path) -> str:
 
         if stripped.startswith("apikey:"):
             value = stripped.split(":", 1)[1].strip().strip("\"'")
+            return value or None
+
+    return None
+
+
+def wait_for_bazarr_api_key(path: Path, timeout: int = 120) -> str:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if path.exists():
+            value = parse_bazarr_api_key(path)
             if value:
                 return value
-            break
+        time.sleep(2)
 
-    raise SystemExit(f"❌ Missing auth.apikey in {path}")
+    raise SystemExit(f"❌ Timed out waiting for auth.apikey in {path}")
 
 
 def env_int(name: str, default: int) -> int:
@@ -191,7 +201,7 @@ def main() -> int:
     wait_for_path(sonarr_config, "Sonarr config.xml")
     wait_for_path(radarr_config, "Radarr config.xml")
 
-    bazarr_apikey = read_bazarr_api_key(bazarr_config)
+    bazarr_apikey = wait_for_bazarr_api_key(bazarr_config)
     sonarr_apikey = read_arr_api_key(sonarr_config)
     radarr_apikey = read_arr_api_key(radarr_config)
 
