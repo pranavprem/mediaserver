@@ -13,6 +13,7 @@ from xml.etree import ElementTree as ET
 
 DEFAULT_PROFILE_NAME = "English + Spanish"
 DEFAULT_LANGUAGES = ["en", "es"]
+DEFAULT_ENABLED_PROVIDERS = ["embeddedsubtitles", "podnapisi"]
 
 
 def wait_for_path(path: Path, label: str, timeout: int = 120) -> None:
@@ -188,6 +189,20 @@ def merge_enabled_languages(existing_languages: list[dict]) -> list[str]:
     return enabled_codes
 
 
+def merge_enabled_providers(existing_settings: dict) -> list[str]:
+    current = existing_settings.get("general", {}).get("enabled_providers", []) or []
+    providers = [provider for provider in current if provider]
+    for provider in DEFAULT_ENABLED_PROVIDERS:
+        if provider not in providers:
+            providers.append(provider)
+
+    if os.environ.get("BAZARR_OPENSUBTITLESCOM_USERNAME") and os.environ.get("BAZARR_OPENSUBTITLESCOM_PASSWORD"):
+        if "opensubtitlescom" not in providers:
+            providers.append("opensubtitlescom")
+
+    return providers
+
+
 def main() -> int:
     if len(sys.argv) != 2:
         raise SystemExit("Usage: setup_bazarr.py <CONFIG_ROOT>")
@@ -221,8 +236,13 @@ def main() -> int:
     if not isinstance(existing_languages, list):
         raise SystemExit("❌ Unexpected Bazarr languages response")
 
+    existing_settings = request_json(f"{bazarr_url}/api/system/settings", bazarr_apikey)
+    if not isinstance(existing_settings, dict):
+        raise SystemExit("❌ Unexpected Bazarr settings response")
+
     merged_profiles, profile_id = merge_profiles(existing_profiles)
     enabled_languages = merge_enabled_languages(existing_languages)
+    enabled_providers = merge_enabled_providers(existing_settings)
 
     fields: list[tuple[str, str]] = [
         ("languages-profiles", json.dumps(merged_profiles)),
@@ -245,6 +265,18 @@ def main() -> int:
         ("settings-radarr-apikey", radarr_apikey),
     ]
     fields.extend(("languages-enabled", code) for code in enabled_languages)
+    fields.extend(("settings-general-enabled_providers", provider) for provider in enabled_providers)
+
+    opensubtitles_username = os.environ.get("BAZARR_OPENSUBTITLESCOM_USERNAME")
+    opensubtitles_password = os.environ.get("BAZARR_OPENSUBTITLESCOM_PASSWORD")
+    if opensubtitles_username and opensubtitles_password:
+        fields.extend([
+            ("settings-opensubtitlescom-username", opensubtitles_username),
+            ("settings-opensubtitlescom-password", opensubtitles_password),
+            ("settings-opensubtitlescom-use_hash", "true"),
+            ("settings-opensubtitlescom-include_ai_translated", "false"),
+            ("settings-opensubtitlescom-include_machine_translated", "false"),
+        ])
 
     print(f"Configuring Bazarr default profile '{DEFAULT_PROFILE_NAME}'...")
     apply_settings(f"{bazarr_url}/api/system/settings", bazarr_apikey, fields)

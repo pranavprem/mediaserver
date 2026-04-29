@@ -249,8 +249,16 @@ That target will:
 - wire Bazarr to Sonarr/Radarr using the live API keys from their config files
 - create or update a default `English + Spanish` language profile
 - make that profile the default for new series and movies
+- enable `embeddedsubtitles` and `podnapisi` by default as a no-credential baseline
 
-After that, add at least one subtitle provider in the Bazarr UI (for example OpenSubtitles.com) if you want it to actually fetch subtitles.
+For better coverage, especially if you want more English + Spanish results, also add **OpenSubtitles.com**. You can either:
+- enter it manually in the Bazarr UI, or
+- set `BAZARR_OPENSUBTITLESCOM_USERNAME` and `BAZARR_OPENSUBTITLESCOM_PASSWORD` in `.env` before `make setup-bazarr`
+
+Recommended provider stack for this setup:
+- `embeddedsubtitles` for subtitles already bundled inside files
+- `podnapisi` as a free no-login provider
+- `opensubtitlescom` for broader coverage once you add an account
 
 Important: Bazarr manages **subtitles only**. It does **not** download or swap audio tracks/dubs. It can use detected audio-language metadata to influence subtitle rules, but it does not change the audio stream itself.
 

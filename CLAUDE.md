@@ -74,7 +74,7 @@ The Makefile reads `CONFIG_ROOT` from `.env` (via `include .env`). Prometheus is
 - Grafana: dashboards + provisioning files must be world-readable (`chmod 755` dirs, `chmod 644` files)
 - Recyclarr uses official TRaSH guide templates (`trash_id` quality profiles + `custom_format_groups`), and `make setup-recyclarr` auto-renders live API keys, adopts existing Arr state with `recyclarr state repair --adopt`, then syncs
 - Recyclarr reaches Arr services via `http://gluetun:<port>` because Sonarr/Radarr share gluetun's network namespace
-- Bazarr is bootstrapped by `scripts/setup_bazarr.py` plus `make setup-bazarr`, which wires live Sonarr/Radarr API keys and seeds a default English + Spanish subtitle profile
+- Bazarr is bootstrapped by `scripts/setup_bazarr.py` plus `make setup-bazarr`, which wires live Sonarr/Radarr API keys, seeds a default English + Spanish subtitle profile, and enables `embeddedsubtitles` + `podnapisi` by default
 
 ## Cross-Compose Monitoring
 Other Docker Compose projects (e.g., Oracle trading system) can be scraped by connecting their container to the `mediaserver_monitoring` network:
