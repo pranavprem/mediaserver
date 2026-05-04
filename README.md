@@ -122,6 +122,8 @@ The Makefile reads `CONFIG_ROOT` from `.env` — no hardcoded paths.
 
 **Paperless bootstrap:** after filling the Paperless env vars in `.env`, run `make setup-paperless`
 
+**Paperless separate scanner intake share:** set `PAPERLESS_INTAKE_PATH` in `.env` if you want the Paperless consume/inbox folder on a different NAS share than `DOCUMENTS_ROOT`.
+
 **Paperless admin:** use `make paperless-superuser`, `make paperless-status`, `make paperless-health`, `make paperless-logs`, and `make paperless-backup` instead of raw `docker compose` commands
 
 **Paperless OCR default:** this stack sets `PAPERLESS_OCR_MODE=redo` because mobile-scanner PDFs and app uploads can contain broken or partial text layers that `skip` mode will ignore.
@@ -137,6 +139,7 @@ This guide assumes:
 - Config root: `/volume1/media/config`
 - Media root: `/volume1/media`
 - Documents root: `/volume1/media/documents`
+- Paperless intake path: defaults to `/volume1/media/documents/consume` (or override with `PAPERLESS_INTAKE_PATH`, for example `/volume1/paperless/consume`)
 
 If you're updating the existing NAS deployment, make sure you're on the deployed branch first:
 
@@ -152,6 +155,9 @@ git pull origin private
 mkdir -p /volume1/docker/mediaserver
 mkdir -p /volume1/media/{downloads,downloads/incomplete,movies,tv,photos}
 mkdir -p /volume1/media/documents/{media,consume,export,backups}
+# If you want scanner intake on a separate shared folder instead:
+# mkdir -p /volume1/media/documents/{media,export,backups}
+# mkdir -p /volume1/paperless/consume
 mkdir -p /volume1/media/config/{gluetun,qbittorrent,sabnzbd,prowlarr,sonarr,radarr,bazarr,jellyfin,jellyseerr,plex,vaultwarden,portainer,recyclarr,prometheus,gitea}
 mkdir -p /volume1/media/config/immich/{postgres,redis,model-cache}
 mkdir -p /volume1/media/config/paperless/{data,postgres,redis}

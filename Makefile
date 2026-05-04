@@ -6,6 +6,7 @@ export
 # Services that use network_mode: service:gluetun
 GLUETUN_DEPS = qbittorrent sabnzbd prowlarr radarr sonarr bazarr
 BAZARR_DEFAULT_URL ?= http://127.0.0.1:$(BAZARR_PORT)
+PAPERLESS_INTAKE_PATH ?= $(DOCUMENTS_ROOT)/consume
 
 # ─── Stack Wrappers ──────────────────────────────────────────────────────────
 
@@ -123,7 +124,7 @@ paperless-validate:
 setup-paperless: paperless-validate
 	@echo "📁 Creating Paperless directories..."
 	@mkdir -p $(CONFIG_ROOT)/paperless/data $(CONFIG_ROOT)/paperless/postgres $(CONFIG_ROOT)/paperless/redis
-	@mkdir -p $(DOCUMENTS_ROOT)/media $(DOCUMENTS_ROOT)/consume $(DOCUMENTS_ROOT)/export $(PAPERLESS_BACKUP_ROOT)
+	@mkdir -p $(DOCUMENTS_ROOT)/media $(DOCUMENTS_ROOT)/export $(PAPERLESS_BACKUP_ROOT) $(PAPERLESS_INTAKE_PATH)
 	@$(MAKE) paperless-up
 	@echo "✅ Paperless directories created and services started."
 	@echo "➡️  Next: add a Cloudflare Tunnel public hostname for $(PAPERLESS_URL) -> http://paperless-webserver:8000"
@@ -165,8 +166,8 @@ paperless-health:
 
 paperless-reset-perms: paperless-validate
 	@echo "🔐 Resetting Paperless web/storage permissions (leaving postgres/redis data alone)..."
-	@mkdir -p $(CONFIG_ROOT)/paperless/data $(DOCUMENTS_ROOT)/media $(DOCUMENTS_ROOT)/consume $(DOCUMENTS_ROOT)/export $(PAPERLESS_BACKUP_ROOT)
-	chown -R $(PUID):$(PGID) $(CONFIG_ROOT)/paperless/data $(DOCUMENTS_ROOT)/media $(DOCUMENTS_ROOT)/consume $(DOCUMENTS_ROOT)/export $(PAPERLESS_BACKUP_ROOT)
+	@mkdir -p $(CONFIG_ROOT)/paperless/data $(DOCUMENTS_ROOT)/media $(DOCUMENTS_ROOT)/export $(PAPERLESS_BACKUP_ROOT) $(PAPERLESS_INTAKE_PATH)
+	chown -R $(PUID):$(PGID) $(CONFIG_ROOT)/paperless/data $(DOCUMENTS_ROOT)/media $(DOCUMENTS_ROOT)/export $(PAPERLESS_BACKUP_ROOT) $(PAPERLESS_INTAKE_PATH)
 	@echo "✅ Paperless web/storage permissions reset."
 
 paperless-backup: paperless-up
@@ -176,11 +177,20 @@ paperless-backup: paperless-up
 	DEST="$(PAPERLESS_BACKUP_ROOT)/paperless-$$TS"; \
 	DB_USER="$${PAPERLESS_DB_USERNAME:-paperless}"; \
 	DB_NAME="$${PAPERLESS_DB_DATABASE:-paperless}"; \
+	INTAKE_PATH="$(PAPERLESS_INTAKE_PATH)"; \
+	DOCS_ROOT="$(DOCUMENTS_ROOT)"; \
 	mkdir -p "$$DEST"; \
 	echo "  → $$DEST"; \
 	docker compose exec -T paperless-postgres pg_dump -U "$$DB_USER" -d "$$DB_NAME" > "$$DEST/postgres.sql"; \
 	tar -C "$(CONFIG_ROOT)/paperless" -czf "$$DEST/config-data.tgz" data; \
-	tar -C "$(DOCUMENTS_ROOT)" -czf "$$DEST/documents.tgz" media consume export; \
+	if [ "$$INTAKE_PATH" = "$$DOCS_ROOT/consume" ]; then \
+		tar -C "$$DOCS_ROOT" -czf "$$DEST/documents.tgz" media consume export; \
+	else \
+		tar -C "$$DOCS_ROOT" -czf "$$DEST/documents.tgz" media export; \
+		if [ -d "$$INTAKE_PATH" ]; then \
+			tar -C "$$(dirname "$$INTAKE_PATH")" -czf "$$DEST/intake.tgz" "$$(basename "$$INTAKE_PATH")"; \
+		fi; \
+	fi; \
 	echo "✅ Backup written to $$DEST"
 
 paperless-superuser: paperless-up

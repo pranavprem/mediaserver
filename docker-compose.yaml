@@ -503,7 +503,7 @@ services:
       - ${CONFIG_ROOT}/paperless/data:/usr/src/paperless/data
       - ${DOCUMENTS_ROOT}/media:/usr/src/paperless/media
       - ${DOCUMENTS_ROOT}/export:/usr/src/paperless/export
-      - ${DOCUMENTS_ROOT}/consume:/usr/src/paperless/consume
+      - ${PAPERLESS_INTAKE_PATH:-${DOCUMENTS_ROOT}/consume}:/usr/src/paperless/consume
     depends_on:
       paperless-postgres:
         condition: service_healthy
