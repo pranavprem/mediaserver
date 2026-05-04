@@ -128,6 +128,8 @@ The Makefile reads `CONFIG_ROOT` from `.env` — no hardcoded paths.
 
 **Paperless OCR default:** this stack sets `PAPERLESS_OCR_MODE=redo` because mobile-scanner PDFs and app uploads can contain broken or partial text layers that `skip` mode will ignore.
 
+**Paperless scanner share tuning:** if a scanner writing over SMB triggers `File not found` races in the consume folder, start with `PAPERLESS_CONSUMER_INOTIFY_DELAY=10`. If that is still flaky, switch to polling with `PAPERLESS_CONSUMER_POLLING`.
+
 ---
 
 ## Quick start
