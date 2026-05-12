@@ -13,6 +13,8 @@ Clone this repo onto a fresh NAS, follow the steps in order, and end up with the
 - Routes **download traffic** through ProtonVPN using `gluetun` + WireGuard
 - Uses both **torrents** (qBittorrent) and **Usenet** (SABnzbd) for downloads
 - Automates TV + Movies with Sonarr/Radarr, indexers managed by Prowlarr
+- Adds **Whisparr** with a dedicated `/adult` library path so adult media stays separate from movies/TV
+- Adds **Stash** for local adult library browsing/metadata and **Stasharr Portal** for Whisparr-backed scene requests
 - Adds **Bazarr** for subtitle automation, with a default English + Spanish profile bootstrap
 - **Recyclarr** auto-syncs quality profiles from TRaSH guides
 - Request UI with **Jellyseerr** driving Sonarr/Radarr
@@ -33,9 +35,9 @@ Clone this repo onto a fresh NAS, follow the steps in order, and end up with the
 
 | Network | Purpose | Containers |
 |---------|---------|------------|
-| `downloads` | VPN-tunneled traffic | gluetun, qbittorrent, sabnzbd, prowlarr, radarr, sonarr, bazarr, recyclarr |
-| `media` | Media streaming & management | jellyfin, jellyseerr, plex, recyclarr |
-| `proxy` | Cloudflare tunnel access | cloudflared, jellyfin, jellyseerr, plex, vaultwarden, immich-server, paperless-webserver |
+| `downloads` | VPN-tunneled traffic | gluetun, qbittorrent, sabnzbd, prowlarr, radarr, whisparr, sonarr, bazarr, recyclarr, stasharr |
+| `media` | Media streaming & management | jellyfin, jellyseerr, plex, stash, stasharr, stasharr-postgres, recyclarr |
+| `proxy` | Cloudflare tunnel access | cloudflared, jellyfin, jellyseerr, plex, stash, stasharr, vaultwarden, immich-server, paperless-webserver |
 | `immich` | Photo stack (DB/Redis isolated) | immich-server, immich-machine-learning, immich-postgres, immich-redis |
 | `paperless` | Document stack (DB/Redis/Gotenberg/Tika isolated) | paperless-webserver, paperless-postgres, paperless-redis, paperless-gotenberg, paperless-tika |
 | `management` | Container management | portainer, watchtower, gitea |
@@ -69,6 +71,7 @@ Services using `network_mode: "service:gluetun"` share gluetun's network namespa
 - `prometheus.yml` — Prometheus scrape config
 - `recyclarr.yml` — Recyclarr quality profiles (API key placeholders on public repo)
 - `grafana/` — provisioning configs and dashboard JSONs
+- `scripts/setup_stasharr.py` — one-shot Stash + Stasharr Portal bootstrap
 - `Makefile` — operational targets (see below)
 - `README.md`
 
@@ -96,6 +99,7 @@ The Makefile reads `CONFIG_ROOT` from `.env` — no hardcoded paths.
 | `make recyclarr-preview` | Previews a TRaSH sync without changing Sonarr/Radarr |
 | `make setup-recyclarr` | One-shot Recyclarr setup: render config and apply TRaSH profiles |
 | `make setup-bazarr` | Starts Bazarr, wires Sonarr/Radarr using live API keys, and seeds default English + Spanish subtitles |
+| `make setup-stasharr` | One-shot Stash + Stasharr Portal bootstrap: creates local-only secrets if needed, wires Whisparr/Stash/StashDB, and queues the first Stash scan |
 | `make setup-paperless` | Validates Paperless env vars, creates NAS directories, and starts the Paperless stack |
 | `make paperless-up` | Starts the Paperless services |
 | `make paperless-down` | Stops the Paperless services |
@@ -117,6 +121,8 @@ The Makefile reads `CONFIG_ROOT` from `.env` — no hardcoded paths.
 **After updating the repo on the NAS:** `git checkout private && git pull origin private && make sync-configs`
 
 **If you're adding Bazarr to an existing deployment:** run `make setup-bazarr` once after pulling.
+
+**If you're enabling the adult request stack:** run `make setup-stasharr` once after pulling. That target writes any missing local-only Stasharr secrets into your local `.env`, enables the `stasharr` compose profile for future `make up/down`, creates the Whisparr `/adult` root folder, and bootstraps the app end-to-end.
 
 **Gluetun updates:** `make update-gluetun` (never use Watchtower for this)
 
@@ -155,12 +161,14 @@ git pull origin private
 
 ```bash
 mkdir -p /volume1/docker/mediaserver
-mkdir -p /volume1/media/{downloads,downloads/incomplete,movies,tv,photos}
+mkdir -p /volume1/media/{downloads,downloads/incomplete,movies,tv,adult,photos}
 mkdir -p /volume1/media/documents/{media,consume,export,backups}
 # If you want scanner intake on a separate shared folder instead:
 # mkdir -p /volume1/media/documents/{media,export,backups}
 # mkdir -p /volume1/paperless/consume
-mkdir -p /volume1/media/config/{gluetun,qbittorrent,sabnzbd,prowlarr,sonarr,radarr,bazarr,jellyfin,jellyseerr,plex,vaultwarden,portainer,recyclarr,prometheus,gitea}
+mkdir -p /volume1/media/config/{gluetun,qbittorrent,sabnzbd,prowlarr,sonarr,radarr,whisparr,bazarr,jellyfin,jellyseerr,plex,vaultwarden,portainer,recyclarr,prometheus,gitea}
+mkdir -p /volume1/media/config/stash/{config,metadata,cache,blobs,generated}
+mkdir -p /volume1/media/config/stasharr/{app,postgres}
 mkdir -p /volume1/media/config/immich/{postgres,redis,model-cache}
 mkdir -p /volume1/media/config/paperless/{data,postgres,redis}
 ```
@@ -226,13 +234,38 @@ SABnzbd listens on internal port **8080**. Since it uses `network_mode: service:
 
 ### Prowlarr — What it syncs
 
-Prowlarr syncs **indexers only** to Sonarr/Radarr. You must add download clients (qBit + SABnzbd) in Sonarr/Radarr manually.
+Prowlarr syncs **indexers only** to Sonarr/Radarr/Whisparr. You must add download clients (qBit + SABnzbd) in Sonarr/Radarr/Whisparr manually.
 
 ### Download client priority
 
-In Sonarr/Radarr → Settings → Download Clients:
+In Sonarr/Radarr/Whisparr → Settings → Download Clients:
 - **SABnzbd:** Priority **1** (preferred — faster, no seeding)
 - **qBittorrent:** Priority **50** (fallback)
+
+### Whisparr + Jellyfin adult library
+
+- In Whisparr, use `/adult` as the root folder so imports never land under `/movies` or `/tv`
+- In Jellyfin, create a separate library named `Adult` pointing at `/adult`
+- Then set selective access per user in **Dashboard → Users → Library access** so only approved accounts can see the `Adult` library
+
+### Stash + Stasharr Portal
+
+Bootstrap the adult request stack with one command:
+
+```bash
+make setup-stasharr
+```
+
+That target will:
+- create any missing Stash / Stasharr directories under `CONFIG_ROOT`
+- auto-generate missing local-only Stasharr secrets in `.env`
+- enable the `stasharr` compose profile so future `make up/down` includes it
+- start **Stash** on `http://NAS_IP:9998` (host 9998 → container 9999 to avoid Dozzle's 9999)
+- start **Stasharr Portal** on `http://NAS_IP:3000`
+- read Whisparr's live API key, ensure the `/adult` root folder exists, and wire **StashDB** + **Stash** + **Whisparr** in Stasharr
+- queue the initial Stash scan of `/adult`
+
+If the target had to generate a Stasharr admin password, it prints it once and saves it in your local `.env` so the login survives future pulls.
 
 ### Jellyseerr
 

@@ -1,12 +1,13 @@
 include .env
 export
 
-.PHONY: up down restart logs ps update-gluetun sync-configs sync-prometheus sync-recyclarr recyclarr-preview setup-recyclarr setup-bazarr sync-grafana paperless-validate setup-paperless paperless-up paperless-down paperless-restart paperless-logs paperless-status paperless-health paperless-reset-perms paperless-backup paperless-superuser paperless-shell help
+.PHONY: up down restart logs ps update-gluetun sync-configs sync-prometheus sync-recyclarr recyclarr-preview setup-recyclarr setup-bazarr setup-stasharr stasharr-up stasharr-down stasharr-restart stasharr-logs stasharr-status sync-grafana paperless-validate setup-paperless paperless-up paperless-down paperless-restart paperless-logs paperless-status paperless-health paperless-reset-perms paperless-backup paperless-superuser paperless-shell help
 
 # Services that use network_mode: service:gluetun
-GLUETUN_DEPS = qbittorrent sabnzbd prowlarr radarr sonarr bazarr
+GLUETUN_DEPS = qbittorrent sabnzbd prowlarr radarr whisparr sonarr bazarr
 BAZARR_DEFAULT_URL ?= http://127.0.0.1:$(BAZARR_PORT)
 PAPERLESS_INTAKE_PATH ?= $(DOCUMENTS_ROOT)/consume
+STASHARR_SERVICES = stash stasharr-postgres stasharr
 
 # ─── Stack Wrappers ──────────────────────────────────────────────────────────
 
@@ -82,6 +83,35 @@ setup-bazarr:
 	@BAZARR_URL="$(BAZARR_DEFAULT_URL)" python3 scripts/setup_bazarr.py "$(CONFIG_ROOT)"
 	@echo "✅ Bazarr configured with default English + Spanish subtitles."
 	@echo "➡️  Next: add subtitle providers in Bazarr at $(BAZARR_DEFAULT_URL) for actual subtitle downloads."
+
+# One-shot Stash + Stasharr Portal setup: generate any missing local-only secrets,
+# start the profile, wire Whisparr/Stash/StashDB, and kick off the first Stash scan.
+setup-stasharr:
+	@echo "🔞 Bootstrapping Stash + Stasharr Portal..."
+	@test -n "$(CONFIG_ROOT)" && [ "$(CONFIG_ROOT)" != "/path/to/config" ] || (echo "❌ Set CONFIG_ROOT in .env first." && exit 1)
+	@test -n "$(ADULT_ROOT)" && [ "$(ADULT_ROOT)" != "/path/to/adult" ] || (echo "❌ Set ADULT_ROOT in .env first." && exit 1)
+	python3 scripts/setup_stasharr.py
+	@echo "✅ Stash + Stasharr Portal bootstrap complete."
+
+stasharr-up:
+	@echo "🚀 Starting Stasharr profile services..."
+	COMPOSE_PROFILES=stasharr docker compose up -d $(STASHARR_SERVICES)
+	@echo "✅ Stasharr profile services started."
+
+stasharr-down:
+	@echo "🛑 Stopping Stasharr profile services..."
+	COMPOSE_PROFILES=stasharr docker compose stop $(STASHARR_SERVICES)
+	@echo "✅ Stasharr profile services stopped."
+
+stasharr-restart:
+	@$(MAKE) stasharr-down
+	@$(MAKE) stasharr-up
+
+stasharr-logs:
+	COMPOSE_PROFILES=stasharr docker compose logs --tail=200 -f $(STASHARR_SERVICES)
+
+stasharr-status:
+	COMPOSE_PROFILES=stasharr docker compose ps $(STASHARR_SERVICES)
 
 # Reload Grafana dashboards (provisioned from repo, restart picks up changes)
 sync-grafana:
@@ -217,6 +247,12 @@ help:
 	@echo "  recyclarr-preview    - Preview Recyclarr adoption + sync without changing Sonarr/Radarr"
 	@echo "  setup-recyclarr      - One-shot Recyclarr setup, adopt existing Arr state, and sync TRaSH profiles"
 	@echo "  setup-bazarr         - Start Bazarr, wire Sonarr/Radarr, and seed default English+Spanish subtitles"
+	@echo "  setup-stasharr       - Bootstrap Stash + Stasharr Portal in one shot"
+	@echo "  stasharr-up          - Start the Stasharr profile services"
+	@echo "  stasharr-down        - Stop the Stasharr profile services"
+	@echo "  stasharr-restart     - Restart the Stasharr profile services"
+	@echo "  stasharr-status      - Show Stasharr profile container status"
+	@echo "  stasharr-logs        - Tail logs for Stasharr profile services"
 	@echo "  sync-grafana         - Reload Grafana dashboards from repo"
 	@echo "  setup-paperless      - Create Paperless dirs on NAS and start the document stack"
 	@echo "  paperless-up         - Start all Paperless services"

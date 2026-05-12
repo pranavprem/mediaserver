@@ -46,6 +46,7 @@ services:
       - ${PROWLARR_PORT}:${PROWLARR_PORT}
       - ${RADARR_PORT}:${RADARR_PORT}
       - ${SONARR_PORT}:${SONARR_PORT}
+      - ${WHISPARR_PORT}:${WHISPARR_PORT}
       - ${BAZARR_PORT}:6767
     volumes:
       - ${CONFIG_ROOT}/gluetun:/gluetun
@@ -188,6 +189,30 @@ services:
       timeout: 10s
       retries: 3
 
+  whisparr:
+    image: lscr.io/linuxserver/whisparr:latest
+    container_name: whisparr
+    network_mode: service:gluetun
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${CONFIG_ROOT}/whisparr:/config
+      - ${DOWNLOADS_ROOT}:/downloads
+      - ${ADULT_ROOT}:/adult
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${WHISPARR_PORT:-6969}/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   sonarr:
     image: lscr.io/linuxserver/sonarr:latest
     container_name: sonarr
@@ -268,6 +293,7 @@ services:
       - ${CONFIG_ROOT}/jellyfin:/config
       - ${MOVIES_ROOT}:/movies
       - ${TV_ROOT}:/tv
+      - ${ADULT_ROOT}:/adult
     ports:
       - ${JELLYFIN_PORT}:8096
     networks:
@@ -305,6 +331,94 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+
+  stash:
+    image: stashapp/stash:latest
+    container_name: stash
+    profiles: ["stasharr"]
+    environment:
+      - STASH_STASH=/data/
+      - STASH_GENERATED=/generated/
+      - STASH_METADATA=/metadata/
+      - STASH_CACHE=/cache/
+      - STASH_PORT=9999
+    volumes:
+      - ${CONFIG_ROOT}/stash/config:/root/.stash
+      - ${ADULT_ROOT}:/data
+      - ${CONFIG_ROOT}/stash/metadata:/metadata
+      - ${CONFIG_ROOT}/stash/cache:/cache
+      - ${CONFIG_ROOT}/stash/blobs:/blobs
+      - ${CONFIG_ROOT}/stash/generated:/generated
+    ports:
+      - ${STASH_PORT:-9998}:9999
+    networks:
+      - media
+      - proxy
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9999/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  stasharr-postgres:
+    image: postgres:17-alpine
+    container_name: stasharr-postgres
+    profiles: ["stasharr"]
+    environment:
+      - POSTGRES_DB=${STASHARR_DB_NAME:-stasharr}
+      - POSTGRES_USER=${STASHARR_DB_USER:-stasharr}
+      - POSTGRES_PASSWORD=${STASHARR_POSTGRES_PASSWORD:-change-this-stasharr-password}
+      - TZ=${TZ}
+    volumes:
+      - ${CONFIG_ROOT}/stasharr/postgres:/var/lib/postgresql/data
+    networks:
+      - media
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d ${STASHARR_DB_NAME:-stasharr} -U ${STASHARR_DB_USER:-stasharr}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  stasharr:
+    image: ghcr.io/enymawse/stasharr-portal:${STASHARR_IMAGE_TAG:-latest}
+    container_name: stasharr
+    profiles: ["stasharr"]
+    environment:
+      - POSTGRES_DB=${STASHARR_DB_NAME:-stasharr}
+      - POSTGRES_USER=${STASHARR_DB_USER:-stasharr}
+      - POSTGRES_PASSWORD=${STASHARR_POSTGRES_PASSWORD:-change-this-stasharr-password}
+      - DATABASE_HOST=stasharr-postgres
+      - DATABASE_URL=
+      - HOST=0.0.0.0
+      - PORT=3000
+      - DATABASE_MIGRATION_MAX_ATTEMPTS=30
+      - DATABASE_MIGRATION_RETRY_DELAY_SECONDS=2
+      - SESSION_COOKIE_SECURE=${STASHARR_SESSION_COOKIE_SECURE:-false}
+    volumes:
+      - ${CONFIG_ROOT}/stasharr/app:/var/lib/stasharr
+    ports:
+      - ${STASHARR_PORT:-3000}:3000
+    depends_on:
+      stasharr-postgres:
+        condition: service_healthy
+    networks:
+      - media
+      - downloads
+      - proxy
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/api/v1/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
   plex:
     image: lscr.io/linuxserver/plex:latest
