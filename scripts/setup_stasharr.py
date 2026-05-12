@@ -149,6 +149,7 @@ def ensure_local_env(path: Path) -> tuple[dict[str, str], dict[str, str]]:
         )
 
     defaults: dict[str, str] = {
+        "WHISPARR_PORT": current.get("WHISPARR_PORT") or "6969",
         "STASH_PORT": current.get("STASH_PORT") or DEFAULT_STASH_PORT,
         "STASHARR_PORT": current.get("STASHARR_PORT") or DEFAULT_STASHARR_PORT,
         "STASHARR_IMAGE_TAG": current.get("STASHARR_IMAGE_TAG") or DEFAULT_STASHARR_IMAGE_TAG,
