@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import errno
 import http.cookiejar
 import json
 import os
 import secrets
+import socket
 import subprocess
 import sys
 import time
@@ -150,6 +152,7 @@ def ensure_local_env(path: Path) -> tuple[dict[str, str], dict[str, str]]:
 
     defaults: dict[str, str] = {
         "WHISPARR_PORT": current.get("WHISPARR_PORT") or "6969",
+        "WHISPARR_HOST_PORT": current.get("WHISPARR_HOST_PORT") or current.get("WHISPARR_PORT") or "6969",
         "STASH_PORT": current.get("STASH_PORT") or DEFAULT_STASH_PORT,
         "STASHARR_PORT": current.get("STASHARR_PORT") or DEFAULT_STASHARR_PORT,
         "STASHARR_IMAGE_TAG": current.get("STASHARR_IMAGE_TAG") or DEFAULT_STASHARR_IMAGE_TAG,
@@ -227,6 +230,76 @@ def ensure_directories(config_root: Path, adult_root: Path) -> None:
     ]
     for path in required:
         path.mkdir(parents=True, exist_ok=True)
+
+
+def list_running_container_ports() -> list[tuple[str, str]]:
+    result = subprocess.run(
+        ["docker", "ps", "--format", "{{.Names}}\t{{.Ports}}"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    entries: list[tuple[str, str]] = []
+    for raw_line in result.stdout.splitlines():
+        name, _, ports = raw_line.partition("\t")
+        entries.append((name.strip(), ports.strip()))
+    return entries
+
+
+def container_using_host_port(port: int) -> str | None:
+    token = f":{port}->"
+    for name, ports in list_running_container_ports():
+        if token in ports:
+            return name
+    return None
+
+
+def host_port_available(port: int) -> bool:
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind(("0.0.0.0", port))
+        return True
+    except OSError as exc:
+        if exc.errno == errno.EADDRINUSE:
+            return False
+        raise
+    finally:
+        sock.close()
+
+
+def resolve_whisparr_host_port(env_path: Path, env: dict[str, str]) -> int:
+    internal_port = env_int(env, "WHISPARR_PORT", 6969)
+    preferred_host_port = env_int(env, "WHISPARR_HOST_PORT", internal_port)
+
+    if host_port_available(preferred_host_port):
+        return preferred_host_port
+
+    conflicting_container = container_using_host_port(preferred_host_port)
+    if conflicting_container == "gluetun":
+        return preferred_host_port
+
+    for candidate in range(preferred_host_port + 1, preferred_host_port + 25):
+        if host_port_available(candidate):
+            upsert_env_values(env_path, {"WHISPARR_HOST_PORT": str(candidate)})
+            env["WHISPARR_HOST_PORT"] = str(candidate)
+            if conflicting_container:
+                print(
+                    f"⚠️  Host port {preferred_host_port} is already used by container {conflicting_container}; switching Whisparr host port to {candidate}."
+                )
+            else:
+                print(
+                    f"⚠️  Host port {preferred_host_port} is already in use; switching Whisparr host port to {candidate}."
+                )
+            return candidate
+
+    if conflicting_container:
+        raise SystemExit(
+            f"❌ Host port {preferred_host_port} is already used by container {conflicting_container}, and no free fallback port was found. Set WHISPARR_HOST_PORT in .env manually and retry."
+        )
+    raise SystemExit(
+        f"❌ Host port {preferred_host_port} is already in use, and no free fallback port was found. Set WHISPARR_HOST_PORT in .env manually and retry."
+    )
 
 
 def run_compose_up(env: dict[str, str]) -> None:
@@ -663,6 +736,8 @@ def main() -> int:
 
     ensure_directories(config_root, adult_root)
 
+    whisparr_host_port = resolve_whisparr_host_port(env_path, env)
+
     compose_env = dict(os.environ)
     compose_env.update(env)
     compose_env["COMPOSE_PROFILES"] = append_profile(env.get("COMPOSE_PROFILES", ""), PROFILE_NAME)
@@ -677,7 +752,7 @@ def main() -> int:
     wait_for_path(whisparr_config, "Whisparr config.xml")
     whisparr_api_key = read_arr_api_key(whisparr_config)
     whisparr_port = env_int(env, "WHISPARR_PORT", 6969)
-    whisparr_base_url = f"http://127.0.0.1:{whisparr_port}"
+    whisparr_base_url = f"http://127.0.0.1:{whisparr_host_port}"
     wait_for_json_url(
         JsonSession(),
         f"{normalize_url(whisparr_base_url)}/api/v3/system/status",

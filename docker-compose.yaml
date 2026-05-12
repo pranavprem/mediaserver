@@ -46,7 +46,7 @@ services:
       - ${PROWLARR_PORT}:${PROWLARR_PORT}
       - ${RADARR_PORT}:${RADARR_PORT}
       - ${SONARR_PORT}:${SONARR_PORT}
-      - ${WHISPARR_PORT:-6969}:${WHISPARR_PORT:-6969}
+      - ${WHISPARR_HOST_PORT:-6969}:${WHISPARR_PORT:-6969}
       - ${BAZARR_PORT}:6767
     volumes:
       - ${CONFIG_ROOT}/gluetun:/gluetun

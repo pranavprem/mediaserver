@@ -122,7 +122,7 @@ The Makefile reads `CONFIG_ROOT` from `.env` — no hardcoded paths.
 
 **If you're adding Bazarr to an existing deployment:** run `make setup-bazarr` once after pulling.
 
-**If you're enabling the adult request stack:** run `make setup-stasharr` once after pulling. That target writes any missing local-only Stasharr secrets into your local `.env`, backfills `ADULT_ROOT` and `WHISPARR_PORT` for older installs, enables the `stasharr` compose profile for future `make up/down`, creates the Whisparr `/adult` root folder, and bootstraps the app end-to-end.
+**If you're enabling the adult request stack:** run `make setup-stasharr` once after pulling. That target writes any missing local-only Stasharr secrets into your local `.env`, backfills `ADULT_ROOT` and `WHISPARR_PORT` for older installs, automatically moves Whisparr to a nearby host port if `6969` is already taken, enables the `stasharr` compose profile for future `make up/down`, creates the Whisparr `/adult` root folder, and bootstraps the app end-to-end.
 
 **Gluetun updates:** `make update-gluetun` (never use Watchtower for this)
 
@@ -261,10 +261,12 @@ That target will:
 - auto-generate missing local-only Stasharr secrets in `.env`
 - infer and write `ADULT_ROOT` into `.env` for older installs if it's still missing
 - backfill `WHISPARR_PORT=6969` into `.env` if that older variable is missing
+- automatically pick and persist `WHISPARR_HOST_PORT` if host port `6969` is already occupied
 - enable the `stasharr` compose profile so future `make up/down` includes it
 - start **Stash** on `http://NAS_IP:9998` (host 9998 → container 9999 to avoid Dozzle's 9999)
 - start **Stasharr Portal** on `http://NAS_IP:3000`
 - read Whisparr's live API key, ensure the `/adult` root folder exists, and wire **StashDB** + **Stash** + **Whisparr** in Stasharr
+- talk to Whisparr through the chosen host port automatically if the default host port had to move
 - queue the initial Stash scan of `/adult`
 
 If the target had to generate a Stasharr admin password, it prints it once and saves it in your local `.env` so the login survives future pulls.
