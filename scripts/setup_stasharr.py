@@ -7,6 +7,7 @@ import json
 import os
 import secrets
 import socket
+import stat
 import subprocess
 import sys
 import time
@@ -230,6 +231,41 @@ def ensure_directories(config_root: Path, adult_root: Path) -> None:
     ]
     for path in required:
         path.mkdir(parents=True, exist_ok=True)
+
+
+def directory_writable_for_uid_gid(path: Path, uid: int, gid: int) -> bool:
+    details = path.stat()
+    mode = stat.S_IMODE(details.st_mode)
+
+    if details.st_uid == uid:
+        return bool(mode & stat.S_IWUSR and mode & stat.S_IXUSR)
+    if details.st_gid == gid:
+        return bool(mode & stat.S_IWGRP and mode & stat.S_IXGRP)
+    return bool(mode & stat.S_IWOTH and mode & stat.S_IXOTH)
+
+
+def ensure_writable_directory(path: Path, uid: int, gid: int, label: str) -> None:
+    path.mkdir(parents=True, exist_ok=True)
+    if directory_writable_for_uid_gid(path, uid, gid):
+        return
+
+    if os.geteuid() == 0:
+        details = path.stat()
+        desired_mode = stat.S_IMODE(details.st_mode) | 0o770
+        os.chown(path, uid, gid)
+        os.chmod(path, desired_mode)
+        print(f"🔐 Fixed {label} ownership/permissions for UID:GID {uid}:{gid} -> {path}")
+        if directory_writable_for_uid_gid(path, uid, gid):
+            return
+        raise SystemExit(
+            f"❌ {label} is still not writable for UID:GID {uid}:{gid} after attempting a repair: {path}"
+        )
+
+    raise SystemExit(
+        "❌ "
+        f"{label} must be writable for UID:GID {uid}:{gid}: {path}\n"
+        f"   Run as root or fix it manually with: chown {uid}:{gid} '{path}' && chmod 775 '{path}'"
+    )
 
 
 def list_running_container_ports() -> list[tuple[str, str]]:
@@ -733,8 +769,11 @@ def main() -> int:
 
     config_root = require_path(env, "CONFIG_ROOT")
     adult_root = require_path(env, "ADULT_ROOT")
+    puid = env_int(env, "PUID", 1000)
+    pgid = env_int(env, "PGID", 1000)
 
     ensure_directories(config_root, adult_root)
+    ensure_writable_directory(adult_root, puid, pgid, "ADULT_ROOT")
 
     whisparr_host_port = resolve_whisparr_host_port(env_path, env)
 

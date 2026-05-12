@@ -262,6 +262,7 @@ That target will:
 - infer and write `ADULT_ROOT` into `.env` for older installs if it's still missing
 - backfill `WHISPARR_PORT=6969` into `.env` if that older variable is missing
 - automatically pick and persist `WHISPARR_HOST_PORT` if host port `6969` is already occupied
+- repair `ADULT_ROOT` ownership/permissions for your configured `PUID`/`PGID` when the bootstrap is run as root
 - enable the `stasharr` compose profile so future `make up/down` includes it
 - start **Stash** on `http://NAS_IP:9998` (host 9998 → container 9999 to avoid Dozzle's 9999)
 - start **Stasharr Portal** on `http://NAS_IP:3000`
