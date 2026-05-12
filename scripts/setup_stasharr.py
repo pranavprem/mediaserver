@@ -543,6 +543,58 @@ class StashClient:
                 time.sleep(2)
         raise SystemExit(f"❌ Timed out waiting for Stash GraphQL: {last_error}")
 
+    def system_status(self) -> dict[str, Any]:
+        payload = self.graphql(
+            """
+            query SystemStatus {
+              systemStatus {
+                status
+                ffmpegPath
+                ffprobePath
+              }
+            }
+            """
+        )
+        status = payload.get("data", {}).get("systemStatus")
+        if not isinstance(status, dict):
+            raise HttpFailure("Unexpected Stash systemStatus response")
+        return status
+
+    def ffmpeg_ready(self) -> bool:
+        status = self.system_status()
+        return bool(status.get("ffmpegPath")) and bool(status.get("ffprobePath"))
+
+    def download_ffmpeg(self) -> str:
+        payload = self.graphql(
+            """
+            mutation DownloadFFMpeg {
+              downloadFFMpeg
+            }
+            """
+        )
+        job_id = payload.get("data", {}).get("downloadFFMpeg")
+        if not job_id:
+            raise HttpFailure("Stash downloadFFMpeg did not return a job ID")
+        return str(job_id)
+
+    def wait_for_ffmpeg(self, timeout: int = 300) -> dict[str, Any]:
+        deadline = time.time() + timeout
+        last_status: dict[str, Any] | None = None
+        last_error: Exception | None = None
+        while time.time() < deadline:
+            try:
+                status = self.system_status()
+                last_status = status
+                if status.get("ffmpegPath") and status.get("ffprobePath"):
+                    return status
+            except Exception as exc:  # noqa: BLE001
+                last_error = exc
+            time.sleep(3)
+
+        if last_error:
+            raise HttpFailure(f"Timed out waiting for Stash ffmpeg download: {last_error}")
+        raise HttpFailure(f"Timed out waiting for Stash ffmpeg download: {last_status}")
+
     def current_stashes(self) -> list[dict[str, Any]] | None:
         try:
             payload = self.graphql(
@@ -806,11 +858,35 @@ def main() -> int:
     stash.wait_ready()
     stash_changed = stash.setup_initial_library("/data")
 
+    ffmpeg_warning: str | None = None
+    if not stash.ffmpeg_ready():
+        print("🎞️  Stash is missing ffmpeg/ffprobe; trying automatic download...")
+        try:
+            ffmpeg_job_id = stash.download_ffmpeg()
+            stash.wait_for_ffmpeg(timeout=300)
+            print(f"✅ Stash ffmpeg download completed (job {ffmpeg_job_id}).")
+        except Exception as exc:  # noqa: BLE001
+            ffmpeg_warning = (
+                "Stash is running, but ffmpeg/ffprobe are still unavailable. "
+                f"Initial library scan will be skipped for now: {exc}"
+            )
+            print(f"⚠️  {ffmpeg_warning}")
+
     should_scan = env_bool(env, "STASHARR_TRIGGER_INITIAL_SCAN", True)
     force_rescan = env_bool(env, "STASHARR_RESCAN", False)
     scan_job_id: str | None = None
     if should_scan and (stash_changed or force_rescan):
-        scan_job_id = stash.scan_library("/data", rescan=force_rescan)
+        try:
+            scan_job_id = stash.scan_library("/data", rescan=force_rescan)
+        except HttpFailure as exc:
+            if "missing ffmpeg and/or ffprobe" in str(exc):
+                ffmpeg_warning = (
+                    "Stash integration is configured, but the initial metadata scan could not run because ffmpeg/ffprobe are still missing. "
+                    "Once Stash has ffmpeg, re-run `make setup-stasharr` or trigger a scan in Stash."
+                )
+                print(f"⚠️  {ffmpeg_warning}")
+            else:
+                raise
 
     stasharr_port = env_int(env, "STASHARR_PORT", 3000)
     stasharr_url = f"http://127.0.0.1:{stasharr_port}"
@@ -828,8 +904,11 @@ def main() -> int:
     print(f"   Stasharr:  {stasharr_url}")
     if scan_job_id:
         print(f"   Stash scan job queued: {scan_job_id}")
-    else:
+    elif should_scan and not ffmpeg_warning:
         print("   Stash scan not triggered (library already configured and STASHARR_RESCAN=false).")
+
+    if ffmpeg_warning:
+        print(f"   Warning: {ffmpeg_warning}")
 
     if generated:
         print("\n📝 Updated local .env values for the Stasharr bootstrap:")
