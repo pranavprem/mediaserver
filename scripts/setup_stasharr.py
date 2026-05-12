@@ -120,6 +120,23 @@ def upsert_env_values(path: Path, updates: dict[str, str]) -> set[str]:
     return changed_keys
 
 
+def is_missing_path_value(value: str | None) -> bool:
+    stripped = (value or "").strip()
+    return not stripped or stripped.startswith("/path/to/")
+
+
+def infer_adult_root(current: dict[str, str]) -> str | None:
+    if not is_missing_path_value(current.get("ADULT_ROOT")):
+        return current["ADULT_ROOT"].strip()
+
+    for key in ("MOVIES_ROOT", "TV_ROOT"):
+        if is_missing_path_value(current.get(key)):
+            continue
+        return str(Path(current[key]).expanduser().parent / "adult")
+
+    return None
+
+
 def ensure_local_env(path: Path) -> tuple[dict[str, str], dict[str, str]]:
     if not path.exists():
         raise SystemExit("❌ Missing .env. Copy example.env to .env first.")
@@ -151,6 +168,10 @@ def ensure_local_env(path: Path) -> tuple[dict[str, str], dict[str, str]]:
         "COMPOSE_PROFILES": append_profile(current.get("COMPOSE_PROFILES", ""), PROFILE_NAME),
     }
 
+    inferred_adult_root = infer_adult_root(current)
+    if inferred_adult_root:
+        defaults["ADULT_ROOT"] = inferred_adult_root
+
     changed = upsert_env_values(path, defaults)
     generated: dict[str, str] = {}
     for key in ("STASHARR_POSTGRES_PASSWORD", "STASHARR_ADMIN_PASSWORD"):
@@ -158,13 +179,15 @@ def ensure_local_env(path: Path) -> tuple[dict[str, str], dict[str, str]]:
             generated[key] = defaults[key]
     if "STASHARR_ADMIN_USERNAME" in changed and not current.get("STASHARR_ADMIN_USERNAME"):
         generated["STASHARR_ADMIN_USERNAME"] = defaults["STASHARR_ADMIN_USERNAME"]
+    if "ADULT_ROOT" in changed and is_missing_path_value(current.get("ADULT_ROOT")) and inferred_adult_root:
+        generated["ADULT_ROOT"] = inferred_adult_root
 
     return defaults, generated
 
 
 def require_path(env: dict[str, str], key: str) -> Path:
     value = (env.get(key) or "").strip()
-    if not value or value.startswith("/path/to/"):
+    if is_missing_path_value(value):
         raise SystemExit(f"❌ Set {key} in .env first.")
     return Path(value).expanduser()
 
@@ -694,7 +717,7 @@ def main() -> int:
         print("   Stash scan not triggered (library already configured and STASHARR_RESCAN=false).")
 
     if generated:
-        print("\n🔐 Generated local-only Stasharr credentials/settings were written to .env:")
+        print("\n📝 Updated local .env values for the Stasharr bootstrap:")
         for key in sorted(generated):
             if key.endswith("PASSWORD"):
                 print(f"   {key}=<generated>")

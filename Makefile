@@ -89,7 +89,6 @@ setup-bazarr:
 setup-stasharr:
 	@echo "🔞 Bootstrapping Stash + Stasharr Portal..."
 	@test -n "$(CONFIG_ROOT)" && [ "$(CONFIG_ROOT)" != "/path/to/config" ] || (echo "❌ Set CONFIG_ROOT in .env first." && exit 1)
-	@test -n "$(ADULT_ROOT)" && [ "$(ADULT_ROOT)" != "/path/to/adult" ] || (echo "❌ Set ADULT_ROOT in .env first." && exit 1)
 	python3 scripts/setup_stasharr.py
 	@echo "✅ Stash + Stasharr Portal bootstrap complete."
 

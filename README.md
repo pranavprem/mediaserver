@@ -122,7 +122,7 @@ The Makefile reads `CONFIG_ROOT` from `.env` — no hardcoded paths.
 
 **If you're adding Bazarr to an existing deployment:** run `make setup-bazarr` once after pulling.
 
-**If you're enabling the adult request stack:** run `make setup-stasharr` once after pulling. That target writes any missing local-only Stasharr secrets into your local `.env`, enables the `stasharr` compose profile for future `make up/down`, creates the Whisparr `/adult` root folder, and bootstraps the app end-to-end.
+**If you're enabling the adult request stack:** run `make setup-stasharr` once after pulling. That target writes any missing local-only Stasharr secrets into your local `.env`, backfills `ADULT_ROOT` for older installs when it can infer the right sibling path, enables the `stasharr` compose profile for future `make up/down`, creates the Whisparr `/adult` root folder, and bootstraps the app end-to-end.
 
 **Gluetun updates:** `make update-gluetun` (never use Watchtower for this)
 
@@ -259,6 +259,7 @@ make setup-stasharr
 That target will:
 - create any missing Stash / Stasharr directories under `CONFIG_ROOT`
 - auto-generate missing local-only Stasharr secrets in `.env`
+- infer and write `ADULT_ROOT` into `.env` for older installs if it's still missing
 - enable the `stasharr` compose profile so future `make up/down` includes it
 - start **Stash** on `http://NAS_IP:9998` (host 9998 → container 9999 to avoid Dozzle's 9999)
 - start **Stasharr Portal** on `http://NAS_IP:3000`
