@@ -190,7 +190,7 @@ services:
       retries: 3
 
   whisparr:
-    image: lscr.io/linuxserver/whisparr:latest
+    image: ghcr.io/thespad/whisparr:latest
     container_name: whisparr
     network_mode: service:gluetun
     environment:
