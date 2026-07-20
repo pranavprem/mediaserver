@@ -1,0 +1,133 @@
+name: stack-ops
+
+services:
+  clean-restart-all-stacks:
+    image: docker:27-cli
+    container_name: stack-clean-restart
+    network_mode: none
+    environment:
+      EXCLUDE_STACKS: "portainer stack-ops"
+      STOP_TIMEOUT: "30"
+      HEALTH_TIMEOUT: "120"
+      DRY_RUN: "false"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: "no"
+    entrypoint: ["/bin/sh", "-ceu"]
+    command:
+      - |
+        log() {
+          printf '%s %s\n' "$$(date -Iseconds)" "$$*"
+        }
+
+        contains_word() {
+          case " $$1 " in
+            *" $$2 "*) return 0 ;;
+            *) return 1 ;;
+          esac
+        }
+
+        stack_names() {
+          {
+            docker ps --format '{{.Label "com.docker.compose.project"}}'
+            docker ps --format '{{.Label "com.docker.stack.namespace"}}'
+            docker ps --format '{{.Label "io.portainer.stack.name"}}'
+          } | awk 'NF' | sort -u
+        }
+
+        container_ids_for_stack() {
+          stack="$$1"
+          {
+            docker ps -q --filter "label=com.docker.compose.project=$$stack"
+            docker ps -q --filter "label=com.docker.stack.namespace=$$stack"
+            docker ps -q --filter "label=io.portainer.stack.name=$$stack"
+          } | sort -u
+        }
+
+        is_gluetun() {
+          cid="$$1"
+          service="$$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.service" }}' "$$cid" 2>/dev/null || true)"
+          name="$$(docker inspect --format '{{.Name}}' "$$cid" 2>/dev/null | sed 's#^/##' || true)"
+          [ "$$service" = "gluetun" ] || [ "$$name" = "gluetun" ]
+        }
+
+        wait_for_health() {
+          for cid in "$$@"; do
+            name="$$(docker inspect --format '{{.Name}}' "$$cid" 2>/dev/null | sed 's#^/##' || echo "$$cid")"
+            start="$$(date +%s)"
+            while :; do
+              status="$$(docker inspect --format '{{.State.Status}}' "$$cid" 2>/dev/null || echo missing)"
+              health="$$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$$cid" 2>/dev/null || echo missing)"
+
+              if [ "$$health" = "healthy" ] || [ "$$health" = "none" ]; then
+                log "$$name is ready (status=$$status health=$$health)"
+                break
+              fi
+
+              now="$$(date +%s)"
+              if [ "$$((now - start))" -ge "$${HEALTH_TIMEOUT:-120}" ]; then
+                log "Timed out waiting for $$name health=$$health status=$$status"
+                return 1
+              fi
+
+              sleep 2
+            done
+          done
+        }
+
+        EXCLUDE_STACKS="$${EXCLUDE_STACKS:-portainer stack-ops}"
+        STOP_TIMEOUT="$${STOP_TIMEOUT:-30}"
+        DRY_RUN="$${DRY_RUN:-false}"
+
+        log "Starting clean restart of running Docker stacks"
+        log "Excluded stacks: $$EXCLUDE_STACKS"
+
+        for stack in $$(stack_names); do
+          if contains_word "$$EXCLUDE_STACKS" "$$stack"; then
+            log "Skipping excluded stack: $$stack"
+            continue
+          fi
+
+          ids="$$(container_ids_for_stack "$$stack" | tr '\n' ' ')"
+          if [ -z "$$ids" ]; then
+            log "Skipping $$stack: no running containers"
+            continue
+          fi
+
+          log "Restarting stack: $$stack"
+          for cid in $$ids; do
+            docker inspect --format '  - {{.Name}}' "$$cid" | sed 's#  - /#  - #'
+          done
+
+          if [ "$$DRY_RUN" = "true" ]; then
+            log "DRY_RUN=true, not touching stack: $$stack"
+            continue
+          fi
+
+          docker stop -t "$$STOP_TIMEOUT" $$ids || true
+
+          : > /tmp/gluetun-ids
+          : > /tmp/rest-ids
+          for cid in $$ids; do
+            if is_gluetun "$$cid"; then
+              echo "$$cid" >> /tmp/gluetun-ids
+            else
+              echo "$$cid" >> /tmp/rest-ids
+            fi
+          done
+
+          if [ -s /tmp/gluetun-ids ]; then
+            log "Starting gluetun first for stack: $$stack"
+            docker start $$(cat /tmp/gluetun-ids)
+            wait_for_health $$(cat /tmp/gluetun-ids)
+          fi
+
+          if [ -s /tmp/rest-ids ]; then
+            log "Starting remaining containers for stack: $$stack"
+            docker start $$(cat /tmp/rest-ids)
+          fi
+
+          log "Finished stack: $$stack"
+        done
+
+        log "Clean restart complete"

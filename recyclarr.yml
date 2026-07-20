@@ -1,0 +1,67 @@
+# yaml-language-server: $schema=https://schemas.recyclarr.dev/v8/config-schema.json
+################################################################################
+## Recyclarr Configuration - Official TRaSH Guide Profiles
+##
+## This file is a repo template. `make sync-recyclarr` and `make setup-recyclarr`
+## auto-inject the live Sonarr/Radarr API keys from:
+##   - $(CONFIG_ROOT)/sonarr/config.xml
+##   - $(CONFIG_ROOT)/radarr/config.xml
+################################################################################
+
+################################################################################
+## TRaSH Guides: WEB-1080p (Sonarr)
+## https://trash-guides.info/Sonarr/sonarr-setup-quality-profiles/#web-1080p
+################################################################################
+sonarr:
+  web-1080p:
+    base_url: http://gluetun:8989
+    api_key: __SONARR_API_KEY__
+
+    delete_old_custom_formats: true
+    replace_existing_custom_formats: true
+
+    quality_definition:
+      type: series
+
+    quality_profiles:
+      - trash_id: 72dae194fc92bf828f32cde7744e51a1  # WEB-1080p
+        reset_unmatched_scores:
+          enabled: true
+
+    custom_format_groups:
+      add:
+        - trash_id: 158188097a58d7687dee647e04af0da3  # [Required] Golden Rule HD
+
+      # Groups listed under `skip:` are synced by default by Recyclarr.
+      # Uncomment an entry if you want to stop syncing that group.
+      skip:
+        # - abe720fab2d27682adc2a735136cec02  # [Streaming Services] General
+
+################################################################################
+## TRaSH Guides: HD Bluray + WEB (Radarr)
+## https://trash-guides.info/Radarr/radarr-setup-quality-profiles/#hd-bluray-web
+################################################################################
+radarr:
+  hd-bluray-web:
+    base_url: http://gluetun:7878
+    api_key: __RADARR_API_KEY__
+
+    delete_old_custom_formats: true
+    replace_existing_custom_formats: true
+
+    quality_definition:
+      type: movie
+
+    quality_profiles:
+      - trash_id: d1d67249d3890e49bc12e275d989a7e9  # HD Bluray + WEB
+        reset_unmatched_scores:
+          enabled: true
+
+    custom_format_groups:
+      add:
+        - trash_id: f8bf8eab4617f12dfdbd16303d8da245  # [Required] Golden Rule HD
+
+      # Groups listed under `skip:` are synced by default by Recyclarr.
+      # Uncomment an entry if you want to stop syncing that group.
+      skip:
+        # - d9cc9a504e5ede6294c8b973aad4f028  # [Streaming Services] General
