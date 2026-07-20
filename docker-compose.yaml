@@ -48,9 +48,11 @@ services:
       - ${PROWLARR_PORT}:${PROWLARR_PORT}
       - ${RADARR_PORT}:${RADARR_PORT}
       - ${SONARR_PORT}:${SONARR_PORT}
-      # Extra published port on the VPN namespace for an optional additional
-      # *arr that shares this gluetun (runs from a separate compose project).
-      - ${EXTRA_ARR_PORT:-6969}:${EXTRA_ARR_PORT:-6969}
+      # Published host port for an optional additional *arr that shares this
+      # gluetun from a separate compose project. Host side is movable via
+      # EXTRA_ARR_PORT (e.g. if 6969 is taken on the host); container side is
+      # fixed at 6969, the *arr's listen port, so a moved host port still reaches it.
+      - ${EXTRA_ARR_PORT:-6969}:6969
       - ${BAZARR_PORT}:6767
     volumes:
       - ${CONFIG_ROOT}/gluetun:/gluetun
