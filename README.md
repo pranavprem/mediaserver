@@ -144,6 +144,12 @@ The Makefile reads `CONFIG_ROOT` from `.env` — no hardcoded paths.
 
 **Paperless scanner share tuning:** if a scanner writing over SMB triggers `File not found` races in the consume folder, start with `PAPERLESS_CONSUMER_INOTIFY_DELAY=10`. If that is still flaky, switch to polling with `PAPERLESS_CONSUMER_POLLING`.
 
+**Paperless document date = scan date:** this stack sets `PAPERLESS_NUMBER_OF_SUGGESTED_DATES=0`, which disables date-from-content guessing. Each consumed doc keeps its default `created` date (the consumption/scan date) instead of a date mis-parsed out of the content, so freshly scanned docs always sort to the top by date. Trade-off: Paperless no longer auto-fills the *real* printed document date — set it by hand when it matters, or set the value back to `3` and use `PAPERLESS_IGNORE_DATES` to blacklist bad guesses.
+
+**Paperless on-disk layout:** `PAPERLESS_FILENAME_FORMAT` (set directly in `docker-compose.yaml`, not `.env` — its `{{ }}` syntax collides with Compose's `${VAR:-default}` parser) files documents under `media/documents/media/` as `<year>/<month>/<title>`. After changing it, re-organize existing files with `docker compose exec paperless-webserver document_renamer`.
+
+**Paperless UI title on consume:** the title shown in the web UI defaults to the scanner's raw filename. To auto-set it, add a Workflow in the UI: **Settings → Workflows → Add Workflow**, Trigger type **Document Added** (optionally filtered to source *Consume folder*), Action type **Assignment**, and set **Assign title** to a Jinja template such as `{{ created }} - {{ title }}` (the field's helper lists the placeholders available for that trigger). Because the on-disk name uses `{{ title }}`, the workflow-assigned title also drives the filename.
+
 ---
 
 ## Quick start

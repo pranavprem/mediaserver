@@ -512,6 +512,15 @@ services:
       - PAPERLESS_REDIS=redis://:${PAPERLESS_REDIS_PASSWORD}@paperless-redis:6379
       - PAPERLESS_OCR_LANGUAGE=${PAPERLESS_OCR_LANGUAGE:-eng}
       - PAPERLESS_OCR_MODE=${PAPERLESS_OCR_MODE:-redo}
+      # 0 disables date-from-content guessing, so a consumed doc keeps its
+      # default created date (= consumption date) instead of a mis-parsed one.
+      - PAPERLESS_NUMBER_OF_SUGGESTED_DATES=${PAPERLESS_NUMBER_OF_SUGGESTED_DATES:-0}
+      # On-disk media layout: year/month/title. REMOVE_NONE drops empty
+      # placeholders so docs without a correspondent don't create "none/" dirs.
+      # NOTE: hardcoded (not ${VAR:-default}) on purpose — Compose's ${...:-}
+      # parser eats a brace from a Jinja default, corrupting the format string.
+      - PAPERLESS_FILENAME_FORMAT={{ created_year }}/{{ created_month }}/{{ title }}
+      - PAPERLESS_FILENAME_FORMAT_REMOVE_NONE=true
       - PAPERLESS_CONSUMER_INOTIFY_DELAY=${PAPERLESS_CONSUMER_INOTIFY_DELAY:-0}
       - PAPERLESS_CONSUMER_POLLING=${PAPERLESS_CONSUMER_POLLING:-0}
       - PAPERLESS_CONSUMER_POLLING_RETRY_COUNT=${PAPERLESS_CONSUMER_POLLING_RETRY_COUNT:-5}
