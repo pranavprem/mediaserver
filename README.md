@@ -155,7 +155,14 @@ Setup (secrets never touch this repo — they live in the container's `/app/data
 1. In Paperless: **top-right user menu → My Profile → API Token** (or Django admin) and copy the token.
 2. Open the wizard at `http://10.0.0.116:38427/setup` (host port `PAPERLESS_AI_HOST_PORT`; 3000 is taken on this NAS) and provide:
    - Paperless URL `http://paperless-webserver:8000` and the API token from step 1
-   - AI provider **OpenAI**, your **OpenAI API key**, model `gpt-4o-mini`
+   - AI provider **Custom (OpenAI-compatible)** pointed at OpenRouter: base URL
+     `https://openrouter.ai/api/v1`, an OpenRouter key (`sk-or-v1-...`), model
+     e.g. `deepseek/deepseek-chat`. (OpenRouter isn't a named provider in the
+     wizard, but it speaks the OpenAI API, so use the Custom option.) Add a few
+     dollars of prepaid OpenRouter credit and set **Settings → Privacy** to a
+     no-logging policy so document text isn't used for training. Any other
+     OpenAI-compatible endpoint (OpenAI directly, a local Ollama, etc.) works the
+     same way.
    - Enable **Title**, **Tags**, **Correspondents**, **Document Type**
    - A system prompt that yields `Type — Correspondent — Subject` titles, e.g.:
      > You are a document classifier. Return a concise, filesystem-safe title in the form `Type — Correspondent — Subject` (e.g. `Invoice — PG&E — November 2025`). Do not include a date in the title. Also extract tags, correspondent, document type, and the document's own printed date.
