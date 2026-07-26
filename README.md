@@ -153,7 +153,7 @@ The Makefile reads `CONFIG_ROOT` from `.env` — no hardcoded paths.
 Setup (secrets never touch this repo — they live in the container's `/app/data` volume):
 
 1. In Paperless: **top-right user menu → My Profile → API Token** (or Django admin) and copy the token.
-2. Open the wizard at `http://10.0.0.116:3000/setup` and provide:
+2. Open the wizard at `http://10.0.0.116:38427/setup` (host port `PAPERLESS_AI_HOST_PORT`; 3000 is taken on this NAS) and provide:
    - Paperless URL `http://paperless-webserver:8000` and the API token from step 1
    - AI provider **OpenAI**, your **OpenAI API key**, model `gpt-4o-mini`
    - Enable **Title**, **Tags**, **Correspondents**, **Document Type**

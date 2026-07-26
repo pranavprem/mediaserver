@@ -627,17 +627,19 @@ services:
   # on the first scan, every existing) document's OCR text to an LLM, and writes
   # back an LLM-generated title, tags, correspondent, document type, and date.
   # All config — the OpenAI key and a Paperless API token — is entered ONCE in
-  # the setup wizard at http://<nas>:3000/setup and stored in the /app/data
-  # volume, so no secrets live in this repo. See README for setup + backfill.
+  # the setup wizard at http://<nas>:${PAPERLESS_AI_HOST_PORT:-38427}/setup and
+  # stored in the /app/data volume, so no secrets live in this repo. See README.
   paperless-ai:
     image: clusterzx/paperless-ai
     container_name: paperless-ai
     environment:
+      # Port the app listens on INSIDE the container (host mapping is separate).
       - PAPERLESS_AI_PORT=3000
       # RAG chat/semantic-search sidecar is off — we only want auto-classification.
       - RAG_SERVICE_ENABLED=false
     ports:
-      - ${PAPERLESS_AI_PORT:-3000}:3000
+      # Host port defaults to an obscure high port (3000 is contested on this NAS).
+      - ${PAPERLESS_AI_HOST_PORT:-38427}:3000
     volumes:
       - ${CONFIG_ROOT}/paperless-ai:/app/data
     depends_on:
