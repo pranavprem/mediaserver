@@ -148,7 +148,19 @@ The Makefile reads `CONFIG_ROOT` from `.env` — no hardcoded paths.
 
 **Paperless on-disk layout:** `PAPERLESS_FILENAME_FORMAT` (set directly in `docker-compose.yaml`, not `.env` — its `{{ }}` syntax collides with Compose's `${VAR:-default}` parser) files documents under `media/documents/media/` as `<year>/<month>/<title>`. After changing it, re-organize existing files with `docker compose exec paperless-webserver document_renamer`.
 
-**Paperless UI title on consume:** the title shown in the web UI defaults to the scanner's raw filename. To auto-set it, add a Workflow in the UI: **Settings → Workflows → Add Workflow**, Trigger type **Document Added** (optionally filtered to source *Consume folder*), Action type **Assignment**, and set **Assign title** to a Jinja template such as `{{ created }} - {{ title }}` (the field's helper lists the placeholders available for that trigger). Because the on-disk name uses `{{ title }}`, the workflow-assigned title also drives the filename.
+**Paperless AI auto-classification (`paperless-ai`):** the `paperless-ai` container (clusterzx/paperless-ai) generates the document **title, tags, correspondent, document type, and date** with an LLM instead of leaving the title as the scanner's raw filename. It polls Paperless over the REST API, sends each document's OCR text to a cloud model (default `gpt-4o-mini`), and writes the metadata back. Because the on-disk `PAPERLESS_FILENAME_FORMAT` ends in `{{ title }}`, the LLM title also drives the filename, and letting the LLM set the date supersedes the `PAPERLESS_NUMBER_OF_SUGGESTED_DATES=0` scan-date fallback with the real printed date.
+
+Setup (secrets never touch this repo — they live in the container's `/app/data` volume):
+
+1. In Paperless: **top-right user menu → My Profile → API Token** (or Django admin) and copy the token.
+2. Open the wizard at `http://10.0.0.116:3000/setup` and provide:
+   - Paperless URL `http://paperless-webserver:8000` and the API token from step 1
+   - AI provider **OpenAI**, your **OpenAI API key**, model `gpt-4o-mini`
+   - Enable **Title**, **Tags**, **Correspondents**, **Document Type**
+   - A system prompt that yields `Type — Correspondent — Subject` titles, e.g.:
+     > You are a document classifier. Return a concise, filesystem-safe title in the form `Type — Correspondent — Subject` (e.g. `Invoice — PG&E — November 2025`). Do not include a date in the title. Also extract tags, correspondent, document type, and the document's own printed date.
+3. **Backfill existing docs:** click **Scan now** in the UI (or `POST /api/scan/now` with the app's API key). It processes every not-yet-seen document, which also renames + re-dates existing files on disk via `PAPERLESS_FILENAME_FORMAT`. Watch token usage on the dashboard.
+4. To re-run after tuning the prompt, use the app's reset (`POST /api/reset-all-documents`) then scan again. `gpt-4o-mini` costs fractions of a cent per document.
 
 ---
 
@@ -183,6 +195,7 @@ mkdir -p /volume1/media/documents/{media,consume,export,backups}
 mkdir -p /volume1/media/config/{gluetun,qbittorrent,sabnzbd,prowlarr,sonarr,radarr,bazarr,jellyfin,jellyseerr,plex,vaultwarden,portainer,recyclarr,prometheus,gitea}
 mkdir -p /volume1/media/config/immich/{postgres,redis,model-cache}
 mkdir -p /volume1/media/config/paperless/{data,postgres,redis}
+mkdir -p /volume1/media/config/paperless-ai
 ```
 
 ### Step 2 — Permissions
