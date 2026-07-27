@@ -635,8 +635,13 @@ services:
     environment:
       # Port the app listens on INSIDE the container (host mapping is separate).
       - PAPERLESS_AI_PORT=3000
-      # RAG chat/semantic-search sidecar is off — we only want auto-classification.
-      - RAG_SERVICE_ENABLED=false
+      # RAG chat/semantic-search: bundled Python sidecar (listens on :8000 inside
+      # the container) that indexes documents for conversational Q&A across the
+      # archive. Answering uses the configured AI provider (Gemini via OpenRouter);
+      # the sidecar builds the retrieval index. Adds CPU/RAM + a one-time index
+      # build on first start — watch container memory (cAdvisor/Grafana).
+      - RAG_SERVICE_ENABLED=true
+      - RAG_SERVICE_URL=http://localhost:8000
     ports:
       # Host port defaults to an obscure high port (3000 is contested on this NAS).
       - ${PAPERLESS_AI_HOST_PORT:-38427}:3000

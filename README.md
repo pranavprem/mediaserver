@@ -198,6 +198,15 @@ Assumes ~3,000 input + ~200 output tokens per document. At **~200 docs/month**:
 
 One-time backfill of the existing library is separate: roughly (per-doc cost) × (docs already in Paperless) — e.g. 2,000 docs ≈ ~$3 on Flash, ~$25 on Sonnet.
 
+#### RAG chat (conversational Q&A over your documents)
+
+Enabled via `RAG_SERVICE_ENABLED=true` + `RAG_SERVICE_URL=http://localhost:8000` on the `paperless-ai` service. A Python sidecar bundled in the image (port 8000, internal only — not published) indexes your documents; the **Chat** tab in the paperless-ai UI then answers natural-language questions, using the configured AI provider (Gemini via OpenRouter) for the answers.
+
+- **First start builds a full document index** — the chat has no context until indexing finishes. Watch the container logs; give it time proportional to library size.
+- **Resource cost:** the sidecar adds CPU/RAM (embedding + a local vector index) and downloads an embedding model on first run. Monitor container memory via cAdvisor/Grafana; this is the main reason it was off by default.
+- **Query cost:** each question is one LLM call to your provider — pennies on Gemini Flash.
+- If the index fails to build, check the logs for embedding errors (`docker logs paperless-ai`); the retrieval step is the part most sensitive to provider/model availability.
+
 ---
 
 ## Quick start
