@@ -148,26 +148,55 @@ The Makefile reads `CONFIG_ROOT` from `.env` — no hardcoded paths.
 
 **Paperless on-disk layout:** `PAPERLESS_FILENAME_FORMAT` (set directly in `docker-compose.yaml`, not `.env` — its `{{ }}` syntax collides with Compose's `${VAR:-default}` parser) files documents under `media/documents/media/` as `<year>/<month>/<title>`. After changing it, re-organize existing files with `docker compose exec paperless-webserver document_renamer`.
 
-**Paperless AI auto-classification (`paperless-ai`):** the `paperless-ai` container (clusterzx/paperless-ai) generates the document **title, tags, correspondent, document type, and date** with an LLM instead of leaving the title as the scanner's raw filename. It polls Paperless over the REST API, sends each document's OCR text to a cloud model (default `gpt-4o-mini`), and writes the metadata back. Because the on-disk `PAPERLESS_FILENAME_FORMAT` ends in `{{ title }}`, the LLM title also drives the filename, and letting the LLM set the date supersedes the `PAPERLESS_NUMBER_OF_SUGGESTED_DATES=0` scan-date fallback with the real printed date.
+### Paperless AI auto-classification (`paperless-ai`)
 
-Setup (secrets never touch this repo — they live in the container's `/app/data` volume):
+The `paperless-ai` container (clusterzx/paperless-ai) generates each document's **title, tags, correspondent, document type, and date** with an LLM instead of leaving the title as the scanner's raw filename. It polls Paperless over the REST API, sends each document's OCR text to a model, and writes the metadata back. Because the on-disk `PAPERLESS_FILENAME_FORMAT` ends in `{{ title }}`, the LLM title also drives the filename, and letting the LLM set the date supersedes the `PAPERLESS_NUMBER_OF_SUGGESTED_DATES=0` scan-date fallback with the real printed date.
+
+**Secrets never touch this repo** — the OpenRouter key and Paperless API token are entered once in the wizard and live in the container's `/app/data` volume.
+
+#### Provider and model
+
+We route through **OpenRouter** (one account, model-agnostic, existing prepaid credit) using the wizard's **Custom (OpenAI-compatible)** provider — OpenRouter isn't a named provider but speaks the OpenAI API. Any OpenAI-compatible endpoint (OpenAI directly, a local Ollama, etc.) works the same way.
+
+- **Default model: `google/gemini-2.5-flash`** — cheap, fast, strong at structured extraction, and available as a Zero-Data-Retention endpoint. Effective enough for this task (title/correspondent/type/date from clean OCR text); its accuracy depends more on OCR quality than model tier, and we already run `PAPERLESS_OCR_MODE=redo`.
+- **Upgrade path: `anthropic/claude-sonnet-4.6`** — higher-quality extraction if too many titles/dates come out wrong. Swapping is a one-field change in the wizard (no redeploy). Overkill for most personal docs.
+- **Security (do this):** in OpenRouter, **Settings → Privacy → enforce Zero Data Retention (ZDR)** for the provider group you use. ZDR means the provider stores nothing and cannot train on your document text — the real privacy lever, independent of model. (The strictly-more-private option is not using the cloud at all, i.e. a local Ollama model; ZDR is the most-secure cloud option.)
+
+#### Setup
 
 1. In Paperless: **top-right user menu → My Profile → API Token** (or Django admin) and copy the token.
-2. Open the wizard at `http://10.0.0.116:38427/setup` (host port `PAPERLESS_AI_HOST_PORT`; 3000 is taken on this NAS) and provide:
-   - Paperless URL `http://paperless-webserver:8000` and the API token from step 1
-   - AI provider **Custom (OpenAI-compatible)** pointed at OpenRouter: base URL
-     `https://openrouter.ai/api/v1`, an OpenRouter key (`sk-or-v1-...`), model
-     e.g. `deepseek/deepseek-chat`. (OpenRouter isn't a named provider in the
-     wizard, but it speaks the OpenAI API, so use the Custom option.) Add a few
-     dollars of prepaid OpenRouter credit and set **Settings → Privacy** to a
-     no-logging policy so document text isn't used for training. Any other
-     OpenAI-compatible endpoint (OpenAI directly, a local Ollama, etc.) works the
-     same way.
-   - Enable **Title**, **Tags**, **Correspondents**, **Document Type**
-   - A system prompt that yields `Type — Correspondent — Subject` titles, e.g.:
-     > You are a document classifier. Return a concise, filesystem-safe title in the form `Type — Correspondent — Subject` (e.g. `Invoice — PG&E — November 2025`). Do not include a date in the title. Also extract tags, correspondent, document type, and the document's own printed date.
+2. Open the wizard at `http://10.0.0.116:38427/setup` (host port `PAPERLESS_AI_HOST_PORT`; 3000 is taken on this NAS) and fill in:
+
+   | Field | Value |
+   |---|---|
+   | App login (username + password) | new credentials you invent to protect the paperless-ai UI (store in Vaultwarden) |
+   | Paperless URL | `http://paperless-webserver:8000` (internal Docker DNS, not the tunnel URL) |
+   | Paperless API Token | from step 1 |
+   | Paperless Username | your Paperless admin account name |
+   | AI provider | **Custom (OpenAI-compatible)** |
+   | Base URL | `https://openrouter.ai/api/v1` |
+   | API Key | OpenRouter key (`sk-or-v1-...`) |
+   | Model | `google/gemini-2.5-flash` |
+   | Enable | **Title, Tags, Correspondents, Document Type** |
+   | `tokenLimit` (input cap) | **128000** — whole doc always seen; it's a ceiling, not a fixed spend, and cost stays trivial at this volume. Lower to ~16000–32000 only to bound cost on rare giant docs. Must stay under the model's context window. |
+   | `responseTokens` (output cap) | **1000** — metadata output is only ~100–300 tokens; this is safe headroom. Don't go below ~500 or long responses get truncated into invalid output. |
+
+   System prompt (yields `Type — Correspondent — Subject` titles):
+   > You are a document classifier. Return a concise, filesystem-safe title in the form `Type — Correspondent — Subject` (e.g. `Invoice — PG&E — November 2025`). Do not include a date in the title. Also extract tags, the correspondent, the document type, and the document's own printed date.
+
 3. **Backfill existing docs:** click **Scan now** in the UI (or `POST /api/scan/now` with the app's API key). It processes every not-yet-seen document, which also renames + re-dates existing files on disk via `PAPERLESS_FILENAME_FORMAT`. Watch token usage on the dashboard.
-4. To re-run after tuning the prompt, use the app's reset (`POST /api/reset-all-documents`) then scan again. `gpt-4o-mini` costs fractions of a cent per document.
+4. To re-run after tuning the prompt, use the app's reset (`POST /api/reset-all-documents`) then scan again.
+
+#### Cost (OpenRouter, prepaid credit)
+
+Assumes ~3,000 input + ~200 output tokens per document. At **~200 docs/month**:
+
+| Model | ~Monthly | Notes |
+|---|---|---|
+| `google/gemini-2.5-flash` | **~$0.30** | default; $75 credit effectively never runs out |
+| `anthropic/claude-sonnet-4.6` | ~$2.60 | upgrade; still ~2.5 years on $75 |
+
+One-time backfill of the existing library is separate: roughly (per-doc cost) × (docs already in Paperless) — e.g. 2,000 docs ≈ ~$3 on Flash, ~$25 on Sonnet.
 
 ---
 
