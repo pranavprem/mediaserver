@@ -120,9 +120,9 @@ The Makefile reads `CONFIG_ROOT` from `.env` — no hardcoded paths.
 
 **General stack control:** prefer `make up`, `make down`, `make restart`, `make logs`, and `make ps` over raw `docker compose` commands.
 
-**NAS deployment branch:** this stack is deployed from the Gitea `private` branch on the NAS.
+**NAS deployment branch:** this stack is deployed from GitHub `master` on the NAS.
 
-**After updating the repo on the NAS:** `git checkout private && git pull origin private && make sync-configs`
+**After updating the repo on the NAS:** `git checkout master && git pull github master && make sync-configs`
 
 **If you're adding Bazarr to an existing deployment:** run `make setup-bazarr` once after pulling.
 
@@ -224,8 +224,8 @@ If you're updating the existing NAS deployment, make sure you're on the deployed
 
 ```bash
 cd /volume1/docker/mediaserver
-git checkout private
-git pull origin private
+git checkout master
+git pull github master
 ```
 
 ### Step 1 — Create folders
@@ -484,6 +484,8 @@ Then add a scrape job to `prometheus.yml` targeting that container.
 
 Auto-updates containers at 4 AM daily. **Gluetun is excluded** (`watchtower.enable=false`) because recreating gluetun orphans all `network_mode: service:gluetun` containers. **Immich is also excluded** because blind `immich-server:release` updates can require a matching Postgres extension image.
 
+Watchtower pins `DOCKER_API_VERSION=1.40` so the stale upstream Docker client can still talk to modern Docker daemons. Without it, Watchtower may crash-loop with `client version 1.25 is too old`.
+
 Update gluetun manually:
 ```bash
 make update-gluetun
@@ -511,9 +513,9 @@ make logs
 
 LAN-only Git server at `http://NAS_IP:41234`. Set `GITEA_DISABLE_REGISTRATION=true` after creating your admin account.
 
-For this stack, the NAS deployment tracks the `private` branch from Gitea.
+For this stack, the NAS deployment tracks GitHub `master`; Gitea is just the LAN-only Git service running in the stack.
 
 ```bash
-git remote add nas http://NAS_IP:41234/username/repo.git
-git push -u nas private
+git remote add github https://github.com/pranavprem/mediaserver.git
+git pull github master
 ```

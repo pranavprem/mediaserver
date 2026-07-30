@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 ## Project Overview
-This is Pranav's self-hosted media server stack running on a UGREEN NAS at 10.0.0.116. It uses Docker Compose to orchestrate all services. The repo lives on the NAS and is mirrored to GitHub.
+This is Pranav's self-hosted media server stack running on a UGREEN NAS at 10.0.0.116. It uses Docker Compose to orchestrate all services. The NAS deployment tracks GitHub `master`.
 
 ## Architecture
 - **VPN:** Gluetun (all download clients route through VPN via `network_mode: service:gluetun`)
@@ -12,7 +12,7 @@ This is Pranav's self-hosted media server stack running on a UGREEN NAS at 10.0.
 - **Photos:** Immich (Google Photos replacement) — 29,170 assets (206.3GB) migrated from Google Photos via immich-go
 - **Management:** Portainer is now a separate bootstrap compose stack (HTTP only, port 9443 removed — conflicts with NAS); Watchtower handles auto-updates inside this stack
 - **Monitoring:** Dozzle (:9999), Prometheus (:9090), Grafana (:3333), cAdvisor, node-exporter on `monitoring` network
-- **Git:** Gitea (LAN-only, :41234)
+- **Git:** GitHub `master` for deployment; Gitea remains a LAN-only Git service in the stack (:41234)
 - **Security:** Vaultwarden (tunnel-only, signups disabled), Cloudflare Tunnel for external access
 - **Other:** Recyclarr (TRaSH quality profiles — still needs proper setup)
 
@@ -33,8 +33,8 @@ CLAUDE.md             # This file
 ```
 
 ## Remotes
-- **origin (Gitea, primary):** `http://10.0.0.116:41234/pranav-gitea/mediaserver.git`
-- **github:** `https://github.com/pranavprem/mediaserver.git`
+- **github (deployment source):** `https://github.com/pranavprem/mediaserver.git`
+- **origin (stale Gitea mirror):** `http://10.0.0.116:41234/pranav-gitea/mediaserver.git`
 - **Branch:** `master`
 
 ## Key Operational Commands
