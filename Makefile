@@ -9,6 +9,7 @@ BAZARR_DEFAULT_URL ?= http://127.0.0.1:$(BAZARR_PORT)
 PAPERLESS_INTAKE_PATH ?= $(DOCUMENTS_ROOT)/consume
 JELLYSEERR_BACKUP_ROOT ?= $(CONFIG_ROOT)/backups
 PORTAINER_COMPOSE = docker compose --env-file .env -f portainer-compose.yaml
+ADULT_STACK_DIR ?= ../mediaserver-adult
 
 # ─── Stack Wrappers ──────────────────────────────────────────────────────────
 
@@ -147,6 +148,12 @@ update-gluetun:
 	@until docker inspect --format='{{.State.Health.Status}}' gluetun 2>/dev/null | grep -q healthy; do sleep 2; done
 	@echo "🚀 Starting dependents..."
 	docker compose up -d $(GLUETUN_DEPS)
+	@if [ -f "$(ADULT_STACK_DIR)/Makefile" ]; then \
+		echo "🔁 Rejoining adult Whisparr to the recreated gluetun namespace..."; \
+		$(MAKE) -C "$(ADULT_STACK_DIR)" rejoin-gluetun; \
+	elif docker ps -a --format '{{.Names}}' | grep -qx whisparr; then \
+		echo "⚠️  Whisparr exists, but $(ADULT_STACK_DIR) was not found. Run the adult stack's rejoin-gluetun target manually."; \
+	fi
 	@echo "✅ Gluetun and all dependents updated."
 
 # ─── Paperless Bootstrap ────────────────────────────────────────────────────

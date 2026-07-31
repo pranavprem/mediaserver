@@ -50,9 +50,9 @@ services:
       - ${SONARR_PORT}:${SONARR_PORT}
       # Published host port for an optional additional *arr that shares this
       # gluetun from a separate compose project. Host side is movable via
-      # EXTRA_ARR_PORT (e.g. if 6969 is taken on the host); container side is
+      # EXTRA_ARR_PORT (6969 is often taken by Portainer); container side is
       # fixed at 6969, the *arr's listen port, so a moved host port still reaches it.
-      - ${EXTRA_ARR_PORT:-6969}:6969
+      - ${EXTRA_ARR_PORT:-6970}:6969
       - ${BAZARR_PORT}:6767
     volumes:
       - ${CONFIG_ROOT}/gluetun:/gluetun
@@ -705,6 +705,7 @@ services:
       - WATCHTOWER_TIMEOUT=60s
       - DOCKER_API_VERSION=${DOCKER_API_VERSION:-1.40}
       - WATCHTOWER_INCLUDE_STOPPED=false
+      - WATCHTOWER_DISABLE_CONTAINERS=${WATCHTOWER_DISABLE_CONTAINERS:-homebutler,kasa-bridge,solve-it-grid,solve-it-grid-api,example-app,whisparr,oracle-debug,oracle,oracle-autodeploy,morpheus-gatekeeper,tor-proxy}
       - WATCHTOWER_NOTIFICATIONS=${WATCHTOWER_NOTIFICATIONS:-}
       - WATCHTOWER_NOTIFICATION_URL=${WATCHTOWER_NOTIFICATION_URL:-}
     volumes:
