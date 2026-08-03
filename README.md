@@ -207,6 +207,18 @@ Enabled via `RAG_SERVICE_ENABLED=true` + `RAG_SERVICE_URL=http://localhost:8000`
 - **Query cost:** each question is one LLM call to your provider — pennies on Gemini Flash.
 - If the index fails to build, check the logs for embedding errors (`docker logs paperless-ai`); the retrieval step is the part most sensitive to provider/model availability.
 
+#### Second Paperless user (`paperless-ai-2`)
+
+A second Paperless user on the **same** `paperless-webserver` gets their own classifier via the `paperless-ai-2` service — its own wizard at `http://10.0.0.116:38428` (`PAPERLESS_AI_2_HOST_PORT`), own `/app/data` volume, own token/prompt. Setup mirrors the first instance (`mkdir -p ${CONFIG_ROOT}/paperless-ai-2`, redeploy, run the wizard with that user's Paperless API token; the `Expiry Date` custom field is global, so it already exists).
+
+**Critical — token scope prevents double-classification.** paperless-ai processes every document its token can *see*, and the two instances track processed docs in separate SQLite DBs (so the AI-processed tag does not stop cross-instance overlap). For clean separation each instance must use a **non-superuser** Paperless account scoped to that user's own documents:
+
+- Each user's documents must be **owned by** that user (assign ownership on consume via a Paperless workflow, or by using per-user consume folders).
+- Each `paperless-ai` uses that user's **non-superuser** API token. A superuser token sees everything, so both instances would classify the same documents.
+- If the first instance currently uses a superuser token, switch it to a scoped account too, or the two will overlap.
+
+RAG is left off on `paperless-ai-2` by default to avoid running two document indexers (double memory) on the NAS; enable it the same way as the first instance if wanted.
+
 ---
 
 ## Quick start
@@ -241,6 +253,7 @@ mkdir -p /volume1/media/config/{gluetun,qbittorrent,sabnzbd,prowlarr,sonarr,rada
 mkdir -p /volume1/media/config/immich/{postgres,redis,model-cache}
 mkdir -p /volume1/media/config/paperless/{data,postgres,redis}
 mkdir -p /volume1/media/config/paperless-ai
+mkdir -p /volume1/media/config/paperless-ai-2   # second Paperless user's AI classifier
 ```
 
 ### Step 2 — Permissions

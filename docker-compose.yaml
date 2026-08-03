@@ -658,6 +658,36 @@ services:
       - no-new-privileges=true
     restart: unless-stopped
 
+  # Second AI auto-classifier for a second Paperless USER on the SAME Paperless
+  # server (shared paperless-webserver, separate logins). It runs its OWN setup
+  # wizard at http://<nas>:${PAPERLESS_AI_2_HOST_PORT:-38428}/setup with that
+  # user's Paperless API token, so it only processes documents that user can see.
+  # IMPORTANT: for clean separation, each user's paperless-ai must use a
+  # NON-superuser token scoped to that user's own documents — a superuser token
+  # sees ALL documents and both instances would classify the same docs. The
+  # AI-processed tag does NOT prevent this (each instance tracks state in its own
+  # /app/data SQLite). RAG left off here to avoid doubling the NAS index memory.
+  paperless-ai-2:
+    image: clusterzx/paperless-ai
+    container_name: paperless-ai-2
+    environment:
+      - PAPERLESS_AI_PORT=3000
+      - RAG_SERVICE_ENABLED=false
+    ports:
+      - ${PAPERLESS_AI_2_HOST_PORT:-38428}:3000
+    volumes:
+      - ${CONFIG_ROOT}/paperless-ai-2:/app/data
+    depends_on:
+      paperless-webserver:
+        condition: service_healthy
+    networks:
+      - paperless
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges=true
+    restart: unless-stopped
+
 # ╭──────────────────────────────────────────────────────────────────────────────╮
 # │  ░█▄█░█▀█░█▀█░█▀█░█▀▀░█▀▀░█▄█░█▀▀░█▀█░▀█▀                                    │
 # │  ░█░█░█▀█░█░█░█▀█░█░█░█▀▀░█░█░█▀▀░█░█░░█░                                    │
