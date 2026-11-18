@@ -25,8 +25,8 @@ Run these from the NAS in `/volume1/docker/mediaserver`.
 1. Pull the updated repo:
 
 ```bash
-git checkout private
-git pull origin private
+git checkout master
+git pull github master
 ```
 
 1. If Portainer is currently running from the old `mediaserver` compose file, detach it from that stack:
@@ -48,8 +48,8 @@ make portainer-up
 
 - Name: `mediaserver`
 - Build method: Git repository
-- Repository URL: `http://10.0.0.116:41234/pranav-gitea/mediaserver.git`
-- Repository reference: `refs/heads/private`
+- Repository URL: the Git URL you deploy from (for example your fork of this repo)
+- Repository reference: `refs/heads/master`
 - Compose path: `docker-compose.yaml`
 - Environment: load or paste the existing values from `/volume1/docker/mediaserver/.env`
 

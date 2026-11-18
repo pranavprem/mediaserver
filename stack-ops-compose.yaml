@@ -12,6 +12,8 @@ services:
       DRY_RUN: "false"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+    security_opt:
+      - no-new-privileges:true
     restart: "no"
     entrypoint: ["/bin/sh", "-ceu"]
     command:

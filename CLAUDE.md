@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 ## Project Overview
-This is Pranav's self-hosted media server stack running on a UGREEN NAS at 10.0.0.116. It uses Docker Compose to orchestrate all services. The NAS deployment tracks GitHub `master`.
+This is Pranav's self-hosted media server stack running on a UGREEN NAS. It uses Docker Compose to orchestrate all services. The NAS deployment tracks GitHub `master`.
 
 ## Architecture
 - **VPN:** Gluetun (all download clients route through VPN via `network_mode: service:gluetun`)
@@ -9,10 +9,10 @@ This is Pranav's self-hosted media server stack running on a UGREEN NAS at 10.0.
 - **Arr Stack:** Sonarr, Radarr, Prowlarr, Bazarr (media automation)
 - **Media Servers:** Jellyfin + Plex
 - **Request UI:** Seerr (drives Sonarr/Radarr; Docker service/container name remains `jellyseerr` for compatibility)
-- **Photos:** Immich (Google Photos replacement) — 29,170 assets (206.3GB) migrated from Google Photos via immich-go
-- **Management:** Portainer is now a separate bootstrap compose stack (HTTP only, port 9443 removed — conflicts with NAS); Watchtower handles auto-updates inside this stack
+- **Photos:** Immich (Google Photos replacement)
+- **Management:** Portainer is now a separate bootstrap compose stack (HTTP only, port 9443 removed — conflicts with NAS); Watchtower handles auto-updates inside this stack, opt-in per service by label
 - **Monitoring:** Dozzle (:9999), Prometheus (:9090), Grafana (:3333), cAdvisor, node-exporter on `monitoring` network
-- **Git:** GitHub `master` for deployment; Gitea remains a LAN-only Git service in the stack (:41234)
+- **Git:** GitHub `master` for deployment; Gitea remains a Git service in the stack (:41234)
 - **Security:** Vaultwarden (tunnel-only, signups disabled), Cloudflare Tunnel for external access
 - **Other:** Recyclarr (TRaSH quality profiles — still needs proper setup)
 
@@ -34,7 +34,7 @@ CLAUDE.md             # This file
 
 ## Remotes
 - **github (deployment source):** `https://github.com/pranavprem/mediaserver.git`
-- **origin (stale Gitea mirror):** `http://10.0.0.116:41234/pranav-gitea/mediaserver.git`
+- **origin (stale Gitea mirror):** LAN Gitea — URL in `CLAUDE.local.md`
 - **Branch:** `master`
 
 ## Key Operational Commands
@@ -52,25 +52,29 @@ make update-gluetun    # Safe gluetun update: pull → stop dependents → recre
 
 The Makefile reads `CONFIG_ROOT` from `.env` (via `include .env`). Prometheus is copied from repo to `$CONFIG_ROOT/prometheus/`. Recyclarr is rendered from the repo template plus live API keys read from `$CONFIG_ROOT/{sonarr,radarr}/config.xml`.
 
-## Network Architecture (6 isolated networks)
+## Network Architecture (isolated by function)
 | Network | Purpose | Key containers |
 |---------|---------|----------------|
 | `downloads` | VPN-tunneled traffic | gluetun, qbittorrent, sabnzbd, prowlarr, radarr, sonarr, bazarr, recyclarr |
 | `media` | Media streaming | jellyfin, jellyseerr (Seerr), plex, recyclarr |
-| `proxy` | Cloudflare tunnel | cloudflared, jellyfin, jellyseerr (Seerr), plex, vaultwarden, immich-server |
+| `proxy` | Cloudflare tunnel → media servers | cloudflared, jellyfin, jellyseerr (Seerr), plex |
+| `proxy-vault` / `proxy-photos` / `proxy-docs` / `proxy-git` | Cloudflare tunnel → one sensitive backend each | cloudflared + vaultwarden / immich-server / paperless-webserver / gitea |
+| `paperless` | Document stack (isolated DB/Redis) | paperless-webserver, paperless-ai, paperless-ai-2, paperless-postgres, paperless-redis, paperless-gotenberg, paperless-tika |
+| `socket-proxy` | Read-only Docker API for Dozzle (internal, no route out) | docker-socket-proxy, dozzle |
 | `immich` | Photo stack (isolated DB/Redis) | immich-server, immich-ml, immich-postgres, immich-redis |
 | `management` | Git + auto-updates | watchtower, gitea |
 | `monitoring` | Observability | prometheus, grafana, cadvisor, node-exporter, dozzle |
 
 ## Key Configuration Notes
 - **Gluetun dependents** (qbittorrent, sabnzbd, prowlarr, radarr, sonarr, bazarr) use `network_mode: service:gluetun` — they share gluetun's network namespace and CANNOT publish their own ports
-- Prowlarr indexer priorities: NZBgeek=1, DrunkenSlug=5, torrents=25
-- Watchtower: gluetun and Immich excluded (`watchtower.enable=false`), rolling restarts DISABLED (was causing restart spam)
+- Watchtower: opt-in (`WATCHTOWER_LABEL_ENABLE=true`) — only services labelled `watchtower.enable=true` update. Gluetun, Immich, Vaultwarden and paperless-ai are left out; use `make update-gluetun` / `make update-manual`. Rolling restarts DISABLED (was causing restart spam)
+- Tunneled backends each get their own `proxy-*` network so a compromised media server cannot reach Vaultwarden or Paperless at all (Immich and Gitea still publish LAN ports, reachable through the host). A new tunneled service needs its own network added to `cloudflared`
+- `docker.sock:ro` does NOT make the Docker API read-only. Dozzle goes through `docker-socket-proxy` (blocks writes, but container env is still readable through it); only Watchtower, cAdvisor and the proxy touch the socket
+- Secrets fail closed: required passwords use `${VAR:?}` so a missing value stops the deploy instead of falling back to a default
 - Portainer: standalone bootstrap stack using `${CONFIG_ROOT}/portainer`; healthcheck disabled (no tools in container), port 9443 removed (conflicts with NAS)
 - Portainer should not be part of the stack it manages. Use `make portainer-up` once, then import `mediaserver` as a Git-backed stack named `mediaserver`.
 - qBit: password persistence was an issue (fixed 2026-03-03) — must set password via WebUI on first run
 - Immich: ML networking fixed by removing `internal: true` from immich network. Face detection + facial recognition running. Use the Immich-maintained Postgres image with VectorChord/pgvector; keep Immich out of Watchtower because server and DB extension upgrades must be coordinated.
-- Abhinaya has her own Immich account
 - Cloudflare Tunnel routes: vault.yourdomain.com, photos.yourdomain.com, jellyfin, etc.
 - Vaultwarden: signups disabled, tunnel-only access (no LAN port exposed), HTTP internally (TLS at Cloudflare edge)
 - Prometheus: runs as user `nobody` — config files must be `chmod 644`
@@ -87,7 +91,6 @@ docker network connect mediaserver_monitoring <container_name>
 Then add a scrape job to `prometheus.yml`.
 
 ## Pending Work
-- [ ] Complete Cloudflare Access setup (audit H1) — follow `docs/cloudflare-access-setup.md`; dashboard work + Immich app headers on both phones
 - [ ] Verify live Recyclarr sync on the NAS after the next `make setup-recyclarr` run
 - [ ] Set up Grafana dashboards properly (provisioning is in place, dashboards need tuning)
 - [ ] Verify current state of arr services on gluetun network (was reverted at one point)
@@ -100,11 +103,15 @@ Then add a scrape job to `prometheus.yml`.
 - Prometheus config must be world-readable or it silently fails
 
 ## Environment
-- **Host:** UGREEN NAS (10.0.0.116)
+- **Host:** UGREEN NAS (address in `CLAUDE.local.md`)
 - **Orchestration:** Docker Compose
 - **External access:** Cloudflare Tunnel
-- **LAN access:** All services available on 10.0.0.116:<port>
+- **LAN access:** Services available on `<NAS_IP>:<port>`
 - **VPN:** ProtonVPN (WireGuard, Switzerland servers)
 
+## Public Repo Hygiene
+- `master` is public. Private context (real domain, addresses, household names, other projects, pending security work) lives in gitignored `CLAUDE.local.md` and `docs/private/` — never in tracked files or commit messages.
+- Run `make leak-scan` before every push; it scans each unpushed commit against the gitignored `.leak-terms` list and fails closed if the list is missing.
+
 ## Owner
-Pranav Prem (pranavprem93@gmail.com)
+Pranav Prem
