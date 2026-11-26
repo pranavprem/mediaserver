@@ -14,6 +14,7 @@ from xml.etree import ElementTree as ET
 DEFAULT_PROFILE_NAME = "English + Spanish"
 DEFAULT_LANGUAGES = ["en", "es"]
 DEFAULT_ENABLED_PROVIDERS = ["embeddedsubtitles", "podnapisi"]
+LOGIN_AUTH_TYPES = ("form", "basic")
 
 
 def wait_for_path(path: Path, label: str, timeout: int = 120) -> None:
@@ -203,6 +204,46 @@ def merge_enabled_providers(existing_settings: dict) -> list[str]:
     return providers
 
 
+def login_fields() -> list[tuple[str, str]]:
+    username = os.environ.get("BAZARR_AUTH_USERNAME")
+    password = os.environ.get("BAZARR_AUTH_PASSWORD")
+    if not (username and password):
+        return []
+    # Bazarr hashes the password server-side when it saves the setting.
+    return [
+        ("settings-auth-type", "form"),
+        ("settings-auth-username", username),
+        ("settings-auth-password", password),
+    ]
+
+
+def login_is_enabled(settings: dict) -> bool:
+    return (settings.get("auth") or {}).get("type") in LOGIN_AUTH_TYPES
+
+
+def verify_login(bazarr_url: str, apikey: str, login_requested: bool) -> None:
+    settings = request_json(f"{bazarr_url}/api/system/settings", apikey)
+    if isinstance(settings, dict) and login_is_enabled(settings):
+        print("Bazarr login is enabled.")
+        return
+
+    if login_requested:
+        raise SystemExit(
+            "❌ Bazarr did not keep the login settings from BAZARR_AUTH_USERNAME/BAZARR_AUTH_PASSWORD. "
+            "Enable it by hand under Settings → General → Security, then re-run."
+        )
+
+    # Bazarr ships with authentication off, and its settings include a custom
+    # post-processing command, so an open UI is command execution for anyone
+    # who can reach the port.
+    print(
+        "⚠️  Bazarr has NO login: anyone who can reach it can change its settings. "
+        "Set BAZARR_AUTH_USERNAME and BAZARR_AUTH_PASSWORD in .env and re-run `make setup-bazarr`, "
+        "or enable Settings → General → Security → Authentication in the UI.",
+        file=sys.stderr,
+    )
+
+
 def main() -> int:
     if len(sys.argv) != 2:
         raise SystemExit("Usage: setup_bazarr.py <CONFIG_ROOT>")
@@ -278,6 +319,9 @@ def main() -> int:
             ("settings-opensubtitlescom-include_machine_translated", "false"),
         ])
 
+    requested_login = login_fields()
+    fields.extend(requested_login)
+
     print(f"Configuring Bazarr default profile '{DEFAULT_PROFILE_NAME}'...")
     apply_settings(f"{bazarr_url}/api/system/settings", bazarr_apikey, fields)
 
@@ -290,6 +334,7 @@ def main() -> int:
         raise SystemExit("❌ Bazarr profile update did not stick")
 
     print(f"Configured Bazarr default profile '{DEFAULT_PROFILE_NAME}' (profileId={profile_id}).")
+    verify_login(bazarr_url, bazarr_apikey, login_requested=bool(requested_login))
     return 0
 
 

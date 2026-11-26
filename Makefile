@@ -1,7 +1,7 @@
 -include .env
 export
 
-.PHONY: up down restart logs ps portainer-up portainer-down portainer-restart portainer-logs portainer-ps update-seerr update-gluetun sync-configs sync-prometheus sync-recyclarr recyclarr-preview setup-recyclarr setup-bazarr sync-grafana paperless-validate setup-paperless paperless-up paperless-down paperless-restart paperless-logs paperless-status paperless-health paperless-reset-perms paperless-backup paperless-superuser paperless-shell help
+.PHONY: up down restart logs ps portainer-up portainer-down portainer-restart portainer-logs portainer-ps update-seerr update-gluetun leak-scan sync-configs sync-prometheus sync-recyclarr recyclarr-preview setup-recyclarr setup-bazarr sync-grafana paperless-validate setup-paperless paperless-up paperless-down paperless-restart paperless-logs paperless-status paperless-health paperless-reset-perms paperless-backup paperless-superuser paperless-shell help
 
 # Services that use network_mode: service:gluetun
 GLUETUN_DEPS = qbittorrent sabnzbd prowlarr radarr sonarr bazarr
@@ -9,7 +9,9 @@ BAZARR_DEFAULT_URL ?= http://127.0.0.1:$(BAZARR_PORT)
 PAPERLESS_INTAKE_PATH ?= $(DOCUMENTS_ROOT)/consume
 JELLYSEERR_BACKUP_ROOT ?= $(CONFIG_ROOT)/backups
 PORTAINER_COMPOSE = docker compose --env-file .env -f portainer-compose.yaml
-ADULT_STACK_DIR ?= ../mediaserver-adult
+# Optional: directory of another compose project whose containers share this
+# gluetun's network namespace. Its Makefile must provide `rejoin-gluetun`.
+EXTRA_GLUETUN_STACK_DIR ?=
 
 # ─── Stack Wrappers ──────────────────────────────────────────────────────────
 
@@ -148,13 +150,21 @@ update-gluetun:
 	@until docker inspect --format='{{.State.Health.Status}}' gluetun 2>/dev/null | grep -q healthy; do sleep 2; done
 	@echo "🚀 Starting dependents..."
 	docker compose up -d $(GLUETUN_DEPS)
-	@if [ -f "$(ADULT_STACK_DIR)/Makefile" ]; then \
-		echo "🔁 Rejoining adult Whisparr to the recreated gluetun namespace..."; \
-		$(MAKE) -C "$(ADULT_STACK_DIR)" rejoin-gluetun; \
-	elif docker ps -a --format '{{.Names}}' | grep -qx whisparr; then \
-		echo "⚠️  Whisparr exists, but $(ADULT_STACK_DIR) was not found. Run the adult stack's rejoin-gluetun target manually."; \
+	@if [ -n "$(EXTRA_GLUETUN_STACK_DIR)" ] && [ -f "$(EXTRA_GLUETUN_STACK_DIR)/Makefile" ]; then \
+		echo "🔁 Rejoining $(EXTRA_GLUETUN_STACK_DIR) to the recreated gluetun namespace..."; \
+		$(MAKE) -C "$(EXTRA_GLUETUN_STACK_DIR)" rejoin-gluetun; \
+	elif [ -n "$(EXTRA_GLUETUN_STACK_DIR)" ]; then \
+		echo "⚠️  EXTRA_GLUETUN_STACK_DIR=$(EXTRA_GLUETUN_STACK_DIR) has no Makefile. Restart its gluetun-attached containers manually."; \
+	else \
+		echo "ℹ️  Containers from other compose projects that share this gluetun now hold a stale network namespace: restart them, or set EXTRA_GLUETUN_STACK_DIR in .env to automate it."; \
 	fi
 	@echo "✅ Gluetun and all dependents updated."
+
+# ─── Publishing Safety ──────────────────────────────────────────────────────
+
+# Scan every unpushed commit for private terms (list lives in gitignored .leak-terms)
+leak-scan:
+	@scripts/leak_scan.sh
 
 # ─── Paperless Bootstrap ────────────────────────────────────────────────────
 
@@ -179,7 +189,7 @@ setup-paperless: paperless-validate
 	@echo "✅ Paperless directories created and services started."
 	@echo "➡️  Next: add a Cloudflare Tunnel public hostname for $(PAPERLESS_URL) -> http://paperless-webserver:8000"
 	@echo "➡️  Then: make paperless-superuser"
-	@echo "➡️  Finally: create a separate Paperless login for Abhinaya"
+	@echo "➡️  Finally: create a separate Paperless login for each additional user"
 
 paperless-up: paperless-validate
 	@echo "🚀 Starting Paperless services..."
@@ -286,6 +296,7 @@ help:
 	@echo "  paperless-superuser  - Run Paperless createsuperuser"
 	@echo "  paperless-shell      - Open a shell in paperless-webserver"
 	@echo "  update-gluetun       - Pull latest gluetun image and restart with dependents"
+	@echo "  leak-scan            - Scan unpushed commits for private terms before pushing"
 	@echo "  help                 - Show this help"
 
 all: help

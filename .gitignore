@@ -2,3 +2,7 @@
 .mcp.json
 __pycache__/
 security-audit.md
+# Private context that must not reach the public remote
+.leak-terms
+CLAUDE.local.md
+docs/private/

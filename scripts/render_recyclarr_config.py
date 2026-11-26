@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import os
 from pathlib import Path
 import sys
 from xml.etree import ElementTree as ET
@@ -15,6 +16,16 @@ def read_api_key(path: Path) -> str:
     return node.text.strip()
 
 
+def write_owner_only(path: Path, content: str) -> None:
+    # The rendered file holds live API keys. Creating it 0600 up front avoids
+    # the window where write_text() leaves it readable at the default umask;
+    # the chmod covers a pre-existing file, whose mode O_CREAT does not change.
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as handle:
+        handle.write(content)
+    os.chmod(path, 0o600)
+
+
 def main() -> int:
     if len(sys.argv) != 2:
         raise SystemExit("Usage: render_recyclarr_config.py <CONFIG_ROOT>")
@@ -29,7 +40,7 @@ def main() -> int:
     rendered = rendered.replace("__RADARR_API_KEY__", read_api_key(config_root / "radarr" / "config.xml"))
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(rendered)
+    write_owner_only(output_path, rendered)
     print(f"Rendered {output_path}")
     return 0
 

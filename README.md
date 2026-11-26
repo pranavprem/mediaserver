@@ -21,8 +21,8 @@ Clone this repo onto a fresh NAS, follow the steps in order, and end up with the
 - Self-hosted photos (**Immich**) with ML-powered face recognition and smart search
 - Self-hosted documents (**Paperless-ngx**) with OCR (Tesseract), Tika + Gotenberg for Office/PDF parsing
 - **Portainer** as a standalone bootstrap stack for central stack management
-- **Watchtower** for automatic container updates (gluetun and Immich excluded — see below)
-- **Gitea** for self-hosted Git (LAN only)
+- **Watchtower** for automatic container updates (everything except gluetun — see below)
+- **Gitea** for self-hosted Git
 - **Observability stack**: Dozzle (logs), Prometheus + Grafana + cAdvisor + node-exporter (metrics)
 
 ---
@@ -35,21 +35,32 @@ Clone this repo onto a fresh NAS, follow the steps in order, and end up with the
 |---------|---------|------------|
 | `downloads` | VPN-tunneled traffic | gluetun, qbittorrent, sabnzbd, prowlarr, radarr, sonarr, bazarr, recyclarr |
 | `media` | Media streaming & management | jellyfin, jellyseerr (Seerr), plex, recyclarr |
-| `proxy` | Cloudflare tunnel access | cloudflared, jellyfin, jellyseerr (Seerr), plex, vaultwarden, immich-server, paperless-webserver |
+| `proxy` | Cloudflare tunnel → media servers | cloudflared, jellyfin, jellyseerr (Seerr), plex |
+| `proxy-vault`, `proxy-photos`, `proxy-docs`, `proxy-git` | Cloudflare tunnel → one sensitive backend each | cloudflared plus vaultwarden / immich-server / paperless-webserver / gitea |
 | `immich` | Photo stack (DB/Redis isolated) | immich-server, immich-machine-learning, immich-postgres, immich-redis |
-| `paperless` | Document stack (DB/Redis/Gotenberg/Tika isolated) | paperless-webserver, paperless-postgres, paperless-redis, paperless-gotenberg, paperless-tika |
+| `paperless` | Document stack (DB/Redis/Gotenberg/Tika isolated) | paperless-webserver, paperless-ai, paperless-ai-2, paperless-postgres, paperless-redis, paperless-gotenberg, paperless-tika |
 | `management` | Git + auto-updates | watchtower, gitea |
 | `monitoring` | Observability stack | prometheus, grafana, cadvisor, node-exporter, dozzle |
+| `socket-proxy` | Read-only Docker API for Dozzle (internal, no route out) | docker-socket-proxy, dozzle |
 
-Homepage (dashboard) spans multiple networks to reach all services for its widgets.
+Each sensitive backend has its own tunnel network. The media servers are the most exposed apps in the stack, and on a shared network a compromised one could call Vaultwarden, Immich, Paperless or Gitea directly, skipping every control at the Cloudflare edge. When you add a tunneled service, give it its own network and add that network to `cloudflared`.
+
+Network isolation only covers ports that are **not** published. Anything under `ports:` is reachable from the LAN and, through the Docker host gateway, from every container. Vaultwarden and Paperless publish nothing, so they are fully cut off from the media servers; Immich (`2283`) and Gitea (`41234`) publish LAN ports and are not.
 
 ### Security Features
 
 - ✅ All containers have `security_opt: no-new-privileges`
-- ✅ All containers have health checks
 - ✅ VPN kill switch (gluetun firewall)
-- ✅ Docker socket mounted read-only where needed
+- ✅ One tunnel network per sensitive backend (see above); full isolation for the ones that publish no host port
+- ✅ Required secrets fail closed: a missing password stops the deploy instead of falling back to a default
+- ✅ Watchtower keeps every image current except gluetun, so fixes for internet-facing apps land without waiting for you
+- ✅ Dozzle reads the Docker API through `docker-socket-proxy`, which rejects every write. It can still read container environments, so it is not a secrets boundary
+- ✅ The Cloudflare tunnel token is passed by environment, so it stays out of process lists and command displays
 - ✅ Services depend on healthy upstream containers
+
+⚠️ Mounting `docker.sock` with `:ro` does **not** make the Docker API read-only — it only protects the socket file. Watchtower and cAdvisor (and Portainer, in its own stack) hold what amounts to root on the host. Keep their ports off untrusted networks.
+
+⚠️ A Cloudflare Tunnel hostname is public the moment it exists, and each app's own login is the only gate in front of it. Use long unique passwords, turn on two-factor wherever the app has it, and keep `VAULTWARDEN_ADMIN_TOKEN` empty so the `/admin` panel stays off.
 
 ### Gluetun & `network_mode: service:gluetun`
 
@@ -57,7 +68,7 @@ Services using `network_mode: "service:gluetun"` share gluetun's network namespa
 
 - They **cannot publish their own ports** — ports must be exposed via gluetun's `ports:` section
 - If gluetun is recreated, all dependent containers get orphaned with a stale network namespace
-- **Watchtower cannot safely update gluetun** — use `make update-gluetun` instead (see Makefile section)
+- **Watchtower cannot safely update gluetun** — it is the one container labelled out. See [Watchtower](#watchtower) for how it gets updated
 
 ---
 
@@ -116,17 +127,18 @@ The Makefile reads `CONFIG_ROOT` from `.env` — no hardcoded paths.
 | `make paperless-superuser` | Runs Paperless `createsuperuser` |
 | `make paperless-shell` | Opens a shell in the Paperless web container |
 | `make update-gluetun` | Pulls latest gluetun image, stops all gluetun dependents, recreates gluetun, waits for healthy, restarts dependents |
+| `make leak-scan` | Scans every unpushed commit for private terms listed in the gitignored `.leak-terms` |
 | `make help` | Shows available targets |
 
 **General stack control:** prefer `make up`, `make down`, `make restart`, `make logs`, and `make ps` over raw `docker compose` commands.
 
 **NAS deployment branch:** this stack is deployed from GitHub `master` on the NAS.
 
-**After updating the repo on the NAS:** `git checkout master && git pull github master && make sync-configs`
+**Deploying:** Portainer deploys the stack from `master`; nothing has to be pulled on the NAS for that. The NAS checkout and its `.env` only matter if you run the `make` targets there (for example `make sync-configs` after changing `prometheus.yml`), and for those the `.env` must hold the same required secrets as the Portainer stack.
 
 **If you're adding Bazarr to an existing deployment:** run `make setup-bazarr` once after pulling.
 
-**Gluetun updates:** `make update-gluetun` (never use Watchtower for this)
+**Gluetun updates:** see [Watchtower](#watchtower) (never let Watchtower do it)
 
 **Portainer bootstrap:** Portainer is intentionally not part of the main `mediaserver` stack. Start it with `make portainer-up`, then import this repo into Portainer as a Git-backed stack named `mediaserver`.
 
@@ -165,14 +177,14 @@ We route through **OpenRouter** (one account, model-agnostic, existing prepaid c
 #### Setup
 
 1. In Paperless: **top-right user menu → My Profile → API Token** (or Django admin) and copy the token.
-2. Open the wizard at `http://10.0.0.116:38427/setup` (host port `PAPERLESS_AI_HOST_PORT`; 3000 is taken on this NAS) and fill in:
+2. Open the wizard at `http://NAS_IP:38427/setup` (host port `PAPERLESS_AI_HOST_PORT`; 3000 is taken on this NAS) and fill in:
 
    | Field | Value |
    |---|---|
    | App login (username + password) | new credentials you invent to protect the paperless-ai UI (store in Vaultwarden) |
    | Paperless URL | `http://paperless-webserver:8000` (internal Docker DNS, not the tunnel URL) |
    | Paperless API Token | from step 1 |
-   | Paperless Username | your Paperless admin account name |
+   | Paperless Username | the Paperless account the token belongs to — prefer a dedicated non-superuser account, so a leaked token cannot administer Paperless |
    | AI provider | **Custom (OpenAI-compatible)** |
    | Base URL | `https://openrouter.ai/api/v1` |
    | API Key | OpenRouter key (`sk-or-v1-...`) |
@@ -209,7 +221,7 @@ Enabled via `RAG_SERVICE_ENABLED=true` + `RAG_SERVICE_URL=http://localhost:8000`
 
 #### Second Paperless user (`paperless-ai-2`)
 
-A second Paperless user on the **same** `paperless-webserver` gets their own classifier via the `paperless-ai-2` service — its own wizard at `http://10.0.0.116:38428` (`PAPERLESS_AI_2_HOST_PORT`), own `/app/data` volume, own token/prompt. Setup mirrors the first instance (`mkdir -p ${CONFIG_ROOT}/paperless-ai-2`, redeploy, run the wizard with that user's Paperless API token; the `Expiry Date` custom field is global, so it already exists).
+A second Paperless user on the **same** `paperless-webserver` gets their own classifier via the `paperless-ai-2` service — its own wizard at `http://NAS_IP:38428` (`PAPERLESS_AI_2_HOST_PORT`), own `/app/data` volume, own token/prompt. Setup mirrors the first instance (`mkdir -p ${CONFIG_ROOT}/paperless-ai-2`, redeploy, run the wizard with that user's Paperless API token; the `Expiry Date` custom field is global, so it already exists).
 
 **Critical — token scope prevents double-classification.** paperless-ai processes every document its token can *see*, and the two instances track processed docs in separate SQLite DBs (so the AI-processed tag does not stop cross-instance overlap). For clean separation each instance must use a **non-superuser** Paperless account scoped to that user's own documents:
 
@@ -357,6 +369,9 @@ That target will:
 - create or update a default `English + Spanish` language profile
 - make that profile the default for new series and movies
 - enable `embeddedsubtitles` and `podnapisi` by default as a no-credential baseline
+- turn on Bazarr's form login when `BAZARR_AUTH_USERNAME` and `BAZARR_AUTH_PASSWORD` are set in `.env`
+
+⚠️ Bazarr ships with **no login**, and without one its web page hands the API key to any visitor. Its settings include a custom post-processing command, so an open Bazarr is command execution for anyone on the LAN. Set the two variables before running the target; it warns if login is still off.
 
 For better coverage, especially if you want more English + Spanish results, also add **OpenSubtitles.com**. You can either:
 - enter it manually in the Bazarr UI, or
@@ -375,7 +390,10 @@ Accessible via Cloudflare tunnel at your configured domain. Use `http://vaultwar
 
 1. Set `VAULTWARDEN_SIGNUPS_ALLOWED=true` → create your account → set to `false` → redeploy
 2. Enable 2FA in vault settings
-3. Optionally disable admin panel: set `VAULTWARDEN_ADMIN_TOKEN=` (empty)
+3. Keep `VAULTWARDEN_ADMIN_TOKEN=` empty so the `/admin` panel is off. If you need it for a moment, set an Argon2id hash, do the work, then empty it again and redeploy — otherwise the panel's login page is on the internet
+4. Verify from outside: `https://vault.yourdomain.com/admin` must say the admin panel is disabled
+
+Vaultwarden is kept current by Watchtower.
 
 ### Immich
 
@@ -387,7 +405,7 @@ Accessible via Cloudflare tunnel and on LAN at `http://NAS_IP:2283`.
 
 **Database image:** Immich Postgres uses the Immich-maintained `ghcr.io/immich-app/postgres` image with VectorChord/pgvector extensions. Keep the existing `${CONFIG_ROOT}/immich/postgres` volume mounted; do not recreate it during upgrades.
 
-**Updates:** Immich services are excluded from Watchtower because `immich-server` and the database extension image need coordinated upgrades. Upgrade Immich manually from Portainer or compose, then verify `immich-postgres` before restarting `immich-server`.
+**Updates:** Watchtower updates `immich-server` and `immich-machine-learning` as `release` moves. The database image is pinned to a tag and does not move by itself: when an Immich release asks for a newer `ghcr.io/immich-app/postgres` tag, bump it in `docker-compose.yaml` to match the release's own compose file, or the server will refuse to start.
 
 **Mobile app:** Use your tunnel URL as server, or `http://NAS_IP:2283` for faster LAN uploads.
 
@@ -406,7 +424,7 @@ Recommended first-run flow:
    ```bash
    make paperless-superuser
    ```
-5. In Paperless, create a separate login for Abhinaya instead of sharing credentials
+5. In Paperless, create a separate login for each additional user instead of sharing credentials
 6. Check health or logs if needed:
    ```bash
    make paperless-status
@@ -458,7 +476,7 @@ The repo now uses official TRaSH quality profile IDs (`trash_id`) plus `custom_f
 ## Observability
 
 ### Dozzle — Container logs
-`http://NAS_IP:9999` — real-time log viewer for all containers.
+`http://NAS_IP:9999` — real-time log viewer for all containers. It has no login by default and container logs often contain secrets; enable Dozzle's own auth (`DOZZLE_AUTH_PROVIDER`) or keep the port off any network you do not fully trust.
 
 ### Prometheus — Metrics
 `http://NAS_IP:9090` — scrapes cAdvisor (container metrics), node-exporter (host metrics), and itself. Additional compose projects can be added as scrape targets (see below).
@@ -495,7 +513,19 @@ Then add a scrape job to `prometheus.yml` targeting that container.
 
 ## Watchtower
 
-Auto-updates containers at 4 AM daily. **Gluetun is excluded** (`watchtower.enable=false`) because recreating gluetun orphans all `network_mode: service:gluetun` containers. **Immich is also excluded** because blind `immich-server:release` updates can require a matching Postgres extension image.
+Checks for updates at 4 AM daily and updates **every container on the host**, including ones from other compose projects, with two exceptions:
+
+- **Gluetun** carries `com.centurylinklabs.watchtower.enable=false`. Recreating it strands every container that shares its network namespace, so it is never updated unattended.
+- **Containers named in `WATCHTOWER_DISABLE_CONTAINERS`** (comma-separated, set in the stack's environment, empty by default). Use it for locally built images, which Watchtower cannot pull and would otherwise complain about every night. Keeping the names in the environment keeps other projects' container names out of this repository.
+
+Any other container can opt out by carrying the same `enable=false` label in its own compose file.
+
+**How gluetun gets updated.** Either run `make update-gluetun` on the host, or let a stack redeploy do it:
+
+- Portainer's automatic Git update re-pulls **every** image each time `master` changes, gluetun included, whatever the stack's own re-pull setting says. Compose then recreates gluetun and the services in this stack that share its network.
+- A manual **Pull and redeploy** in Portainer recreates every container in the stack, changed or not, and updates the images too if **Re-pull image** is on.
+
+After either one, containers from *other* compose projects that join gluetun with `network_mode: container:gluetun` are left on the old network namespace and have no connectivity until they are recreated. Redeploy that project too.
 
 Watchtower pins `DOCKER_API_VERSION=1.40` so the stale upstream Docker client can still talk to modern Docker daemons. Without it, Watchtower may crash-loop with `client version 1.25 is too old`.
 
@@ -524,9 +554,11 @@ make logs
 
 ## Gitea
 
-LAN-only Git server at `http://NAS_IP:41234`. Set `GITEA_DISABLE_REGISTRATION=true` after creating your admin account.
+Git server at `http://NAS_IP:41234`. Set `GITEA_DISABLE_REGISTRATION=true` after creating your admin account. Anonymous browsing is off (`REQUIRE_SIGNIN_VIEW=true`).
 
-For this stack, the NAS deployment tracks GitHub `master`; Gitea is just the LAN-only Git service running in the stack.
+Gitea is attached to the `proxy-git` tunnel network and its `ROOT_URL` is `https://git.${DOMAIN}`. It is only LAN-only if no tunnel hostname points at it — if you do not want it public, delete that hostname and remove `proxy-git` from the service.
+
+For this stack, the NAS deployment tracks GitHub `master`; Gitea is just the Git service running in the stack.
 
 ```bash
 git remote add github https://github.com/pranavprem/mediaserver.git
