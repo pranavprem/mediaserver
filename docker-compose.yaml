@@ -71,8 +71,6 @@ services:
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: cloudflared
-    labels:
-      - "com.centurylinklabs.watchtower.enable=true"
     # The token is read from TUNNEL_TOKEN rather than passed as --token, which
     # keeps it out of the host process list, `docker ps` and anything else that
     # displays container commands. It is still readable through `docker
@@ -107,7 +105,6 @@ services:
     image: lscr.io/linuxserver/qbittorrent:latest
     container_name: qbittorrent
     labels:
-      - "com.centurylinklabs.watchtower.enable=true"
       - "com.centurylinklabs.watchtower.depends-on=gluetun"
     network_mode: service:gluetun
     environment:
@@ -134,7 +131,6 @@ services:
     image: lscr.io/linuxserver/sabnzbd:latest
     container_name: sabnzbd
     labels:
-      - "com.centurylinklabs.watchtower.enable=true"
       - "com.centurylinklabs.watchtower.depends-on=gluetun"
     network_mode: service:gluetun
     environment:
@@ -167,8 +163,6 @@ services:
   prowlarr:
     image: lscr.io/linuxserver/prowlarr:latest
     container_name: prowlarr
-    labels:
-      - "com.centurylinklabs.watchtower.enable=true"
     network_mode: service:gluetun
     environment:
       - PUID=${PUID}
@@ -191,8 +185,6 @@ services:
   radarr:
     image: lscr.io/linuxserver/radarr:latest
     container_name: radarr
-    labels:
-      - "com.centurylinklabs.watchtower.enable=true"
     network_mode: service:gluetun
     environment:
       - PUID=${PUID}
@@ -217,8 +209,6 @@ services:
   sonarr:
     image: lscr.io/linuxserver/sonarr:latest
     container_name: sonarr
-    labels:
-      - "com.centurylinklabs.watchtower.enable=true"
     network_mode: service:gluetun
     environment:
       - PUID=${PUID}
@@ -243,8 +233,6 @@ services:
   bazarr:
     image: lscr.io/linuxserver/bazarr:latest
     container_name: bazarr
-    labels:
-      - "com.centurylinklabs.watchtower.enable=true"
     network_mode: service:gluetun
     environment:
       - PUID=${PUID}
@@ -269,8 +257,6 @@ services:
   recyclarr:
     image: ghcr.io/recyclarr/recyclarr:latest
     container_name: recyclarr
-    labels:
-      - "com.centurylinklabs.watchtower.enable=true"
     environment:
       - TZ=${TZ}
     volumes:
@@ -292,8 +278,6 @@ services:
   jellyfin:
     image: lscr.io/linuxserver/jellyfin:latest
     container_name: jellyfin
-    labels:
-      - "com.centurylinklabs.watchtower.enable=true"
     environment:
       - PUID=${PUID}
       - PGID=${PGID}
@@ -320,8 +304,6 @@ services:
     image: ghcr.io/seerr-team/seerr:latest
     init: true
     container_name: jellyseerr
-    labels:
-      - "com.centurylinklabs.watchtower.enable=true"
     environment:
       - TZ=${TZ}
       - LOG_LEVEL=info
@@ -346,8 +328,6 @@ services:
   plex:
     image: lscr.io/linuxserver/plex:latest
     container_name: plex
-    labels:
-      - "com.centurylinklabs.watchtower.enable=true"
     environment:
       - PUID=${PUID}
       - PGID=${PGID}
@@ -378,10 +358,6 @@ services:
   vaultwarden:
     image: vaultwarden/server:latest
     container_name: vaultwarden
-    # Not opted in to Watchtower: the password vault is updated deliberately
-    # with `make update-manual`, never unattended from a mutable tag.
-    labels:
-      - "com.centurylinklabs.watchtower.enable=false"
     user: ${PUID}:${PGID}
     environment:
       - DOMAIN=${VAULTWARDEN_DOMAIN}
@@ -418,8 +394,6 @@ services:
   immich-server:
     image: ghcr.io/immich-app/immich-server:release
     container_name: immich-server
-    labels:
-      - "com.centurylinklabs.watchtower.enable=false"
     ports:
       - "2283:2283"
     environment:
@@ -461,8 +435,6 @@ services:
   immich-machine-learning:
     image: ghcr.io/immich-app/immich-machine-learning:release
     container_name: immich-machine-learning
-    labels:
-      - "com.centurylinklabs.watchtower.enable=false"
     dns:
       - 8.8.8.8
       - 1.1.1.1
@@ -485,8 +457,6 @@ services:
   immich-redis:
     image: docker.io/redis:6.2-alpine
     container_name: immich-redis
-    labels:
-      - "com.centurylinklabs.watchtower.enable=false"
     command: redis-server --appendonly yes --requirepass ${IMMICH_REDIS_PASSWORD:?set IMMICH_REDIS_PASSWORD}
     environment:
       - TZ=${TZ}
@@ -507,8 +477,6 @@ services:
   immich-postgres:
     image: ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0
     container_name: immich-postgres
-    labels:
-      - "com.centurylinklabs.watchtower.enable=false"
     environment:
       - POSTGRES_USER=${IMMICH_DB_USERNAME:-postgres}
       - POSTGRES_PASSWORD=${IMMICH_DB_PASSWORD:?set IMMICH_DB_PASSWORD}
@@ -538,8 +506,6 @@ services:
   paperless-webserver:
     image: ghcr.io/paperless-ngx/paperless-ngx:latest
     container_name: paperless-webserver
-    labels:
-      - "com.centurylinklabs.watchtower.enable=true"
     environment:
       - USERMAP_UID=${PUID}
       - USERMAP_GID=${PGID}
@@ -600,8 +566,6 @@ services:
   paperless-postgres:
     image: docker.io/library/postgres:16-alpine
     container_name: paperless-postgres
-    labels:
-      - "com.centurylinklabs.watchtower.enable=true"
     environment:
       - POSTGRES_USER=${PAPERLESS_DB_USERNAME:-paperless}
       - POSTGRES_PASSWORD=${PAPERLESS_DB_PASSWORD:?set PAPERLESS_DB_PASSWORD}
@@ -623,8 +587,6 @@ services:
   paperless-redis:
     image: docker.io/redis:7-alpine
     container_name: paperless-redis
-    labels:
-      - "com.centurylinklabs.watchtower.enable=true"
     command: redis-server --appendonly yes --requirepass ${PAPERLESS_REDIS_PASSWORD:?set PAPERLESS_REDIS_PASSWORD}
     environment:
       - TZ=${TZ}
@@ -645,8 +607,6 @@ services:
   paperless-gotenberg:
     image: docker.io/gotenberg/gotenberg:7.10
     container_name: paperless-gotenberg
-    labels:
-      - "com.centurylinklabs.watchtower.enable=true"
     # Paperless-recommended flags: JS disabled, filesystem access limited to /tmp
     command:
       - "gotenberg"
@@ -663,8 +623,6 @@ services:
   paperless-tika:
     image: docker.io/apache/tika:latest
     container_name: paperless-tika
-    labels:
-      - "com.centurylinklabs.watchtower.enable=true"
     environment:
       - TZ=${TZ}
     networks:
@@ -682,10 +640,6 @@ services:
   paperless-ai:
     image: clusterzx/paperless-ai
     container_name: paperless-ai
-    # Not opted in to Watchtower: this image holds a Paperless API token and
-    # sees every document's text, so it is updated with `make update-manual`.
-    labels:
-      - "com.centurylinklabs.watchtower.enable=false"
     environment:
       # Port the app listens on INSIDE the container (host mapping is separate).
       - PAPERLESS_AI_PORT=3000
@@ -724,10 +678,6 @@ services:
   paperless-ai-2:
     image: clusterzx/paperless-ai
     container_name: paperless-ai-2
-    # Not opted in to Watchtower: this image holds a Paperless API token and
-    # sees every document's text, so it is updated with `make update-manual`.
-    labels:
-      - "com.centurylinklabs.watchtower.enable=false"
     environment:
       - PAPERLESS_AI_PORT=3000
       - RAG_SERVICE_ENABLED=false
@@ -756,8 +706,6 @@ services:
   gitea:
     image: gitea/gitea:latest
     container_name: gitea
-    labels:
-      - "com.centurylinklabs.watchtower.enable=true"
     environment:
       - USER_UID=${PUID}
       - USER_GID=${PGID}
@@ -797,10 +745,12 @@ services:
       - WATCHTOWER_TIMEOUT=60s
       - DOCKER_API_VERSION=${DOCKER_API_VERSION:-1.40}
       - WATCHTOWER_INCLUDE_STOPPED=false
-      # Opt-in: only containers labelled watchtower.enable=true are updated.
-      # Watchtower sees every container on the host, so a deny-list would have
-      # to name containers from unrelated compose projects in this file.
-      - WATCHTOWER_LABEL_ENABLE=true
+      # Watchtower updates every container on the host except gluetun (labelled
+      # off above: recreating it strands everything sharing its network) and any
+      # container named here. The names come from the stack env so containers
+      # from unrelated compose projects are never listed in this file. Use it
+      # for locally built images, which Watchtower cannot pull.
+      - WATCHTOWER_DISABLE_CONTAINERS=${WATCHTOWER_DISABLE_CONTAINERS:-}
       - WATCHTOWER_NOTIFICATIONS=${WATCHTOWER_NOTIFICATIONS:-}
       - WATCHTOWER_NOTIFICATION_URL=${WATCHTOWER_NOTIFICATION_URL:-}
     volumes:
@@ -844,8 +794,6 @@ services:
   dozzle:
     image: amir20/dozzle:latest
     container_name: dozzle
-    labels:
-      - "com.centurylinklabs.watchtower.enable=true"
     environment:
       - DOZZLE_REMOTE_HOST=tcp://docker-socket-proxy:2375
     ports:
@@ -868,8 +816,6 @@ services:
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
-    labels:
-      - "com.centurylinklabs.watchtower.enable=true"
     ports:
       - ${PROMETHEUS_PORT:-9090}:9090
     volumes:
@@ -894,8 +840,6 @@ services:
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:latest
     container_name: cadvisor
-    labels:
-      - "com.centurylinklabs.watchtower.enable=true"
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
@@ -911,8 +855,6 @@ services:
   node-exporter:
     image: prom/node-exporter:latest
     container_name: node-exporter
-    labels:
-      - "com.centurylinklabs.watchtower.enable=true"
     command:
       - '--path.procfs=/host/proc'
       - '--path.sysfs=/host/sys'
@@ -933,8 +875,6 @@ services:
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
-    labels:
-      - "com.centurylinklabs.watchtower.enable=true"
     ports:
       - ${GRAFANA_PORT:-3333}:3000
     environment:

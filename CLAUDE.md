@@ -10,7 +10,7 @@ This is Pranav's self-hosted media server stack running on a UGREEN NAS. It uses
 - **Media Servers:** Jellyfin + Plex
 - **Request UI:** Seerr (drives Sonarr/Radarr; Docker service/container name remains `jellyseerr` for compatibility)
 - **Photos:** Immich (Google Photos replacement)
-- **Management:** Portainer is now a separate bootstrap compose stack (HTTP only, port 9443 removed — conflicts with NAS); Watchtower handles auto-updates inside this stack, opt-in per service by label
+- **Management:** Portainer is now a separate bootstrap compose stack (HTTP only, port 9443 removed — conflicts with NAS); Watchtower auto-updates every container on the host except gluetun
 - **Monitoring:** Dozzle (:9999), Prometheus (:9090), Grafana (:3333), cAdvisor, node-exporter on `monitoring` network
 - **Git:** GitHub `master` for deployment; Gitea remains a Git service in the stack (:41234)
 - **Security:** Vaultwarden (tunnel-only, signups disabled), Cloudflare Tunnel for external access
@@ -67,14 +67,16 @@ The Makefile reads `CONFIG_ROOT` from `.env` (via `include .env`). Prometheus is
 
 ## Key Configuration Notes
 - **Gluetun dependents** (qbittorrent, sabnzbd, prowlarr, radarr, sonarr, bazarr) use `network_mode: service:gluetun` — they share gluetun's network namespace and CANNOT publish their own ports
-- Watchtower: opt-in (`WATCHTOWER_LABEL_ENABLE=true`) — only services labelled `watchtower.enable=true` update. Gluetun, Immich, Vaultwarden and paperless-ai are left out; use `make update-gluetun` / `make update-manual`. Rolling restarts DISABLED (was causing restart spam)
+- Watchtower: updates everything on the host except gluetun (labelled `watchtower.enable=false`) and the names in `WATCHTOWER_DISABLE_CONTAINERS` (stack env; for locally built images, kept out of the repo). Rolling restarts DISABLED (was causing restart spam)
+- No extra login layer (no Cloudflare Access / forward-auth) in front of the tunneled apps: each app's own login is the gate, because the phone apps cannot pass one. Prompt updates and the per-backend networks are what compensate
+- Deployment is Portainer-only: stack env lives in Portainer, nothing needs pulling on the NAS. The NAS checkout and `.env` matter only for `make` targets
 - Tunneled backends each get their own `proxy-*` network so a compromised media server cannot reach Vaultwarden or Paperless at all (Immich and Gitea still publish LAN ports, reachable through the host). A new tunneled service needs its own network added to `cloudflared`
 - `docker.sock:ro` does NOT make the Docker API read-only. Dozzle goes through `docker-socket-proxy` (blocks writes, but container env is still readable through it); only Watchtower, cAdvisor and the proxy touch the socket
 - Secrets fail closed: required passwords use `${VAR:?}` so a missing value stops the deploy instead of falling back to a default
 - Portainer: standalone bootstrap stack using `${CONFIG_ROOT}/portainer`; healthcheck disabled (no tools in container), port 9443 removed (conflicts with NAS)
 - Portainer should not be part of the stack it manages. Use `make portainer-up` once, then import `mediaserver` as a Git-backed stack named `mediaserver`.
 - qBit: password persistence was an issue (fixed 2026-03-03) — must set password via WebUI on first run
-- Immich: ML networking fixed by removing `internal: true` from immich network. Face detection + facial recognition running. Use the Immich-maintained Postgres image with VectorChord/pgvector; keep Immich out of Watchtower because server and DB extension upgrades must be coordinated.
+- Immich: ML networking fixed by removing `internal: true` from immich network. Face detection + facial recognition running. Use the Immich-maintained Postgres image with VectorChord/pgvector; Watchtower updates the server and ML images; the Postgres image is pinned, so bump its tag to match the release's compose file when Immich asks for a newer one.
 - Cloudflare Tunnel routes: vault.yourdomain.com, photos.yourdomain.com, jellyfin, etc.
 - Vaultwarden: signups disabled, tunnel-only access (no LAN port exposed), HTTP internally (TLS at Cloudflare edge)
 - Prometheus: runs as user `nobody` — config files must be `chmod 644`
@@ -98,7 +100,8 @@ Then add a scrape job to `prometheus.yml`.
 ## Important Lessons (Hard-Won)
 - `sudo apt update && apt install` on UGREEN NAS **broke Docker app** — NEVER run apt on the NAS. Reinstall Docker app to fix.
 - Watchtower rolling restarts caused restart spam — disabled
-- Gluetun recreation orphans all `network_mode: service:gluetun` containers — always use `make update-gluetun`
+- Gluetun recreation orphans all `network_mode: service:gluetun` containers — never let Watchtower update it
+- Portainer "Pull and redeploy" force-recreates EVERY container in the stack, gluetun included, even when nothing changed. Portainer's automatic Git update re-pulls EVERY image on each change to `master`. After either, containers from other compose projects that share gluetun must be recreated
 - Immich ML needs explicit DNS config (`8.8.8.8`, `1.1.1.1`) to download models from huggingface.co
 - Prometheus config must be world-readable or it silently fails
 

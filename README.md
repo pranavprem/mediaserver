@@ -21,8 +21,8 @@ Clone this repo onto a fresh NAS, follow the steps in order, and end up with the
 - Self-hosted photos (**Immich**) with ML-powered face recognition and smart search
 - Self-hosted documents (**Paperless-ngx**) with OCR (Tesseract), Tika + Gotenberg for Office/PDF parsing
 - **Portainer** as a standalone bootstrap stack for central stack management
-- **Watchtower** for automatic container updates (gluetun and Immich excluded — see below)
-- **Gitea** for self-hosted Git (LAN only)
+- **Watchtower** for automatic container updates (everything except gluetun — see below)
+- **Gitea** for self-hosted Git
 - **Observability stack**: Dozzle (logs), Prometheus + Grafana + cAdvisor + node-exporter (metrics)
 
 ---
@@ -53,14 +53,14 @@ Network isolation only covers ports that are **not** published. Anything under `
 - ✅ VPN kill switch (gluetun firewall)
 - ✅ One tunnel network per sensitive backend (see above); full isolation for the ones that publish no host port
 - ✅ Required secrets fail closed: a missing password stops the deploy instead of falling back to a default
-- ✅ Watchtower is opt-in per service; Vaultwarden and paperless-ai are only updated by hand
+- ✅ Watchtower keeps every image current except gluetun, so fixes for internet-facing apps land without waiting for you
 - ✅ Dozzle reads the Docker API through `docker-socket-proxy`, which rejects every write. It can still read container environments, so it is not a secrets boundary
 - ✅ The Cloudflare tunnel token is passed by environment, so it stays out of process lists and command displays
 - ✅ Services depend on healthy upstream containers
 
 ⚠️ Mounting `docker.sock` with `:ro` does **not** make the Docker API read-only — it only protects the socket file. Watchtower and cAdvisor (and Portainer, in its own stack) hold what amounts to root on the host. Keep their ports off untrusted networks.
 
-⚠️ A Cloudflare Tunnel hostname is public the moment it exists. Put Cloudflare Access (Zero Trust) in front of every hostname whose clients can handle it, and keep `VAULTWARDEN_ADMIN_TOKEN` empty so the `/admin` panel stays off.
+⚠️ A Cloudflare Tunnel hostname is public the moment it exists, and each app's own login is the only gate in front of it. Use long unique passwords, turn on two-factor wherever the app has it, and keep `VAULTWARDEN_ADMIN_TOKEN` empty so the `/admin` panel stays off.
 
 ### Gluetun & `network_mode: service:gluetun`
 
@@ -68,7 +68,7 @@ Services using `network_mode: "service:gluetun"` share gluetun's network namespa
 
 - They **cannot publish their own ports** — ports must be exposed via gluetun's `ports:` section
 - If gluetun is recreated, all dependent containers get orphaned with a stale network namespace
-- **Watchtower cannot safely update gluetun** — use `make update-gluetun` instead (see Makefile section)
+- **Watchtower cannot safely update gluetun** — it is the one container labelled out. See [Watchtower](#watchtower) for how it gets updated
 
 ---
 
@@ -127,7 +127,6 @@ The Makefile reads `CONFIG_ROOT` from `.env` — no hardcoded paths.
 | `make paperless-superuser` | Runs Paperless `createsuperuser` |
 | `make paperless-shell` | Opens a shell in the Paperless web container |
 | `make update-gluetun` | Pulls latest gluetun image, stops all gluetun dependents, recreates gluetun, waits for healthy, restarts dependents |
-| `make update-manual` | Pulls and recreates the services excluded from Watchtower (Vaultwarden, paperless-ai, paperless-ai-2, docker-socket-proxy, Watchtower) |
 | `make leak-scan` | Scans every unpushed commit for private terms listed in the gitignored `.leak-terms` |
 | `make help` | Shows available targets |
 
@@ -135,11 +134,11 @@ The Makefile reads `CONFIG_ROOT` from `.env` — no hardcoded paths.
 
 **NAS deployment branch:** this stack is deployed from GitHub `master` on the NAS.
 
-**After updating the repo on the NAS:** `git checkout master && git pull github master && make sync-configs`
+**Deploying:** Portainer deploys the stack from `master`; nothing has to be pulled on the NAS for that. The NAS checkout and its `.env` only matter if you run the `make` targets there (for example `make sync-configs` after changing `prometheus.yml`), and for those the `.env` must hold the same required secrets as the Portainer stack.
 
 **If you're adding Bazarr to an existing deployment:** run `make setup-bazarr` once after pulling.
 
-**Gluetun updates:** `make update-gluetun` (never use Watchtower for this)
+**Gluetun updates:** see [Watchtower](#watchtower) (never let Watchtower do it)
 
 **Portainer bootstrap:** Portainer is intentionally not part of the main `mediaserver` stack. Start it with `make portainer-up`, then import this repo into Portainer as a Git-backed stack named `mediaserver`.
 
@@ -394,7 +393,7 @@ Accessible via Cloudflare tunnel at your configured domain. Use `http://vaultwar
 3. Keep `VAULTWARDEN_ADMIN_TOKEN=` empty so the `/admin` panel is off. If you need it for a moment, set an Argon2id hash, do the work, then empty it again and redeploy — otherwise the panel's login page is on the internet
 4. Verify from outside: `https://vault.yourdomain.com/admin` must say the admin panel is disabled
 
-Vaultwarden is not auto-updated. Run `make update-manual` when a new release is out.
+Vaultwarden is kept current by Watchtower.
 
 ### Immich
 
@@ -406,7 +405,7 @@ Accessible via Cloudflare tunnel and on LAN at `http://NAS_IP:2283`.
 
 **Database image:** Immich Postgres uses the Immich-maintained `ghcr.io/immich-app/postgres` image with VectorChord/pgvector extensions. Keep the existing `${CONFIG_ROOT}/immich/postgres` volume mounted; do not recreate it during upgrades.
 
-**Updates:** Immich services are excluded from Watchtower because `immich-server` and the database extension image need coordinated upgrades. Upgrade Immich manually from Portainer or compose, then verify `immich-postgres` before restarting `immich-server`.
+**Updates:** Watchtower updates `immich-server` and `immich-machine-learning` as `release` moves. The database image is pinned to a tag and does not move by itself: when an Immich release asks for a newer `ghcr.io/immich-app/postgres` tag, bump it in `docker-compose.yaml` to match the release's own compose file, or the server will refuse to start.
 
 **Mobile app:** Use your tunnel URL as server, or `http://NAS_IP:2283` for faster LAN uploads.
 
@@ -514,16 +513,19 @@ Then add a scrape job to `prometheus.yml` targeting that container.
 
 ## Watchtower
 
-Checks for updates at 4 AM daily, **opt-in**: with `WATCHTOWER_LABEL_ENABLE=true` only containers labelled `com.centurylinklabs.watchtower.enable=true` are touched. Watchtower sees every container on the host, so containers from other compose projects are ignored unless they carry that label themselves.
+Checks for updates at 4 AM daily and updates **every container on the host**, including ones from other compose projects, with two exceptions:
 
-Left out on purpose:
+- **Gluetun** carries `com.centurylinklabs.watchtower.enable=false`. Recreating it strands every container that shares its network namespace, so it is never updated unattended.
+- **Containers named in `WATCHTOWER_DISABLE_CONTAINERS`** (comma-separated, set in the stack's environment, empty by default). Use it for locally built images, which Watchtower cannot pull and would otherwise complain about every night. Keeping the names in the environment keeps other projects' container names out of this repository.
 
-- **Gluetun** — recreating it orphans all `network_mode: service:gluetun` containers. Use `make update-gluetun`.
-- **Immich** — blind `immich-server:release` updates can require a matching Postgres extension image.
-- **Vaultwarden, paperless-ai, paperless-ai-2** — they hold the password vault and a token to every document, so a new image is pulled deliberately with `make update-manual`, not unattended from a mutable tag.
-- **Watchtower and docker-socket-proxy** — they hold the Docker socket. `make update-manual` covers them too.
+Any other container can opt out by carrying the same `enable=false` label in its own compose file.
 
-Containers from other compose projects that used to be updated by this Watchtower stop being updated until you add the label to them.
+**How gluetun gets updated.** Either run `make update-gluetun` on the host, or let a stack redeploy do it:
+
+- Portainer's automatic Git update re-pulls **every** image each time `master` changes, gluetun included, whatever the stack's own re-pull setting says. Compose then recreates gluetun and the services in this stack that share its network.
+- A manual **Pull and redeploy** in Portainer recreates every container in the stack, changed or not, and updates the images too if **Re-pull image** is on.
+
+After either one, containers from *other* compose projects that join gluetun with `network_mode: container:gluetun` are left on the old network namespace and have no connectivity until they are recreated. Redeploy that project too.
 
 Watchtower pins `DOCKER_API_VERSION=1.40` so the stale upstream Docker client can still talk to modern Docker daemons. Without it, Watchtower may crash-loop with `client version 1.25 is too old`.
 

@@ -1,7 +1,7 @@
 -include .env
 export
 
-.PHONY: up down restart logs ps portainer-up portainer-down portainer-restart portainer-logs portainer-ps update-seerr update-gluetun update-manual leak-scan sync-configs sync-prometheus sync-recyclarr recyclarr-preview setup-recyclarr setup-bazarr sync-grafana paperless-validate setup-paperless paperless-up paperless-down paperless-restart paperless-logs paperless-status paperless-health paperless-reset-perms paperless-backup paperless-superuser paperless-shell help
+.PHONY: up down restart logs ps portainer-up portainer-down portainer-restart portainer-logs portainer-ps update-seerr update-gluetun leak-scan sync-configs sync-prometheus sync-recyclarr recyclarr-preview setup-recyclarr setup-bazarr sync-grafana paperless-validate setup-paperless paperless-up paperless-down paperless-restart paperless-logs paperless-status paperless-health paperless-reset-perms paperless-backup paperless-superuser paperless-shell help
 
 # Services that use network_mode: service:gluetun
 GLUETUN_DEPS = qbittorrent sabnzbd prowlarr radarr sonarr bazarr
@@ -12,8 +12,6 @@ PORTAINER_COMPOSE = docker compose --env-file .env -f portainer-compose.yaml
 # Optional: directory of another compose project whose containers share this
 # gluetun's network namespace. Its Makefile must provide `rejoin-gluetun`.
 EXTRA_GLUETUN_STACK_DIR ?=
-# Services deliberately left out of Watchtower; updated with `make update-manual`.
-MANUAL_UPDATE_SERVICES = vaultwarden paperless-ai paperless-ai-2 docker-socket-proxy watchtower
 
 # ─── Stack Wrappers ──────────────────────────────────────────────────────────
 
@@ -162,16 +160,6 @@ update-gluetun:
 	fi
 	@echo "✅ Gluetun and all dependents updated."
 
-# ─── Manual Updates ─────────────────────────────────────────────────────────
-
-# Pull and recreate the services that are excluded from Watchtower on purpose
-update-manual:
-	@echo "🔄 Pulling images for: $(MANUAL_UPDATE_SERVICES)"
-	docker compose pull $(MANUAL_UPDATE_SERVICES)
-	@echo "🚀 Recreating updated services..."
-	docker compose up -d --no-deps $(MANUAL_UPDATE_SERVICES)
-	@echo "✅ Manual-update services are current. Check: docker compose ps $(MANUAL_UPDATE_SERVICES)"
-
 # ─── Publishing Safety ──────────────────────────────────────────────────────
 
 # Scan every unpushed commit for private terms (list lives in gitignored .leak-terms)
@@ -308,7 +296,6 @@ help:
 	@echo "  paperless-superuser  - Run Paperless createsuperuser"
 	@echo "  paperless-shell      - Open a shell in paperless-webserver"
 	@echo "  update-gluetun       - Pull latest gluetun image and restart with dependents"
-	@echo "  update-manual        - Pull and recreate services excluded from Watchtower (Vaultwarden, paperless-ai, socket holders)"
 	@echo "  leak-scan            - Scan unpushed commits for private terms before pushing"
 	@echo "  help                 - Show this help"
 
